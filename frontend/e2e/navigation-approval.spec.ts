@@ -1,0 +1,52 @@
+import {test,expect} from '@playwright/test';
+
+test('header uses a Jira icon and workspace opens settings',async({page})=>{
+  await page.route('**/api/settings',route=>route.fulfill({json:{mode:'cloud',siteUrl:'https://example.atlassian.net',configured:true,defaultProject:'SCRUM',missing:[],tokenConfigured:true}}));
+  await page.goto('/meetings');
+  await expect(page.locator('header')).not.toContainText('Jira 실제 연동');
+  const jira=page.getByRole('link',{name:'Jira 홈페이지 열기',exact:true});
+  await expect(jira).toHaveAttribute('href','https://example.atlassian.net');
+  await expect(jira.locator('svg')).toBeVisible();await expect(jira).toHaveText('');
+  await page.getByRole('link',{name:'워크스페이스 설정',exact:true}).click();
+  await expect(page).toHaveURL(/\/settings$/);
+});
+
+test('approval actions stay visible above a long ticket list and approve selected tickets',async({page})=>{
+  const drafts=Array.from({length:30},(_,i)=>({id:'draft-'+i,meetingId:'sticky-ui',projectKey:'DEMO',issueType:'Task',summary:'업무 '+i,description:'검토 내용',assignee:'',priority:'',dueDate:'',labels:[],parent:'',parentDraftId:'',analysisItemIds:[],status:'DRAFT',issueKey:null,issueUrl:null,publishedAt:null,error:null,duplicateSuspected:false,version:0}));
+  const meeting={id:'sticky-ui',title:'긴 티켓 목록',status:'REVIEW_PENDING',createdAt:new Date().toISOString(),drafts,jobs:[],epics:[],content:{occurredAt:'',projectKey:'DEMO',participants:[],memo:'',source:'TEXT',language:'ko',template:'일반',diarization:false,segments:[],minutes:null,items:[],assets:[]}};
+  await page.route('**/api/settings',route=>route.fulfill({json:{mode:'mock',siteUrl:'',configured:false,defaultProject:'DEMO',missing:[],tokenConfigured:false}}));
+  await page.route('**/api/meetings/sticky-ui',route=>route.fulfill({json:meeting}));
+  let approved:string[]=[];
+  await page.route('**/api/ticket-drafts/approve',route=>{approved=route.request().postDataJSON().ids;drafts[0].status='APPROVED';return route.fulfill({json:[drafts[0]]});});
+  await page.goto('/meetings/sticky-ui/tickets');
+  await expect(page.getByLabel('일괄 프로젝트',{exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'프로젝트 적용',exact:true})).toHaveCount(0);
+  const bar=page.locator('.approval-bar');
+  expect(await bar.evaluate(el=>!!(el.compareDocumentPosition(document.querySelector('.review-grid')!)&Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+  await page.getByLabel('업무 0 선택',{exact:true}).check();
+  await page.evaluate(()=>window.scrollTo(0,1600));
+  await expect.poll(async()=>Math.round((await bar.boundingBox())!.y)).toBeGreaterThanOrEqual(0);
+  await expect(bar).toBeInViewport();await expect(bar).toContainText('1개 선택');
+  const editor=page.locator('.ticket-editor');
+  await expect.poll(async()=>Math.round((await page.locator('.ticket-editor-header').boundingBox())!.y)).toBeGreaterThanOrEqual(Math.round((await bar.boundingBox())!.y+(await bar.boundingBox())!.height));
+  await expect(editor.getByRole('heading',{name:'티켓 상세 편집'})).toBeInViewport();
+  const list=page.getByRole('region',{name:'티켓 후보 목록',exact:true});
+  const controls=page.locator('.candidate-panel > .candidate-toolbar').first();
+  const controlsTop=(await controls.boundingBox())!.y;
+  await list.evaluate(el=>el.scrollTop=el.scrollHeight);
+  expect(await list.evaluate(el=>el.scrollTop)).toBeGreaterThan(0);
+  expect(Math.abs((await controls.boundingBox())!.y-controlsTop)).toBeLessThan(1);
+  expect((await list.boundingBox())!.y).toBeGreaterThanOrEqual((await controls.boundingBox())!.y+(await controls.boundingBox())!.height);
+  expect((await list.boundingBox())!.y).toBeGreaterThanOrEqual((await bar.boundingBox())!.y+(await bar.boundingBox())!.height);
+  await page.screenshot({path:'test-results/jira-review-scroll.png'});
+  await page.locator('.candidate').last().getByRole('button').click();
+  await expect(editor.getByLabel('제목',{exact:true})).toHaveValue('업무 29');
+  await expect(editor.getByRole('heading',{name:'티켓 상세 편집'})).toBeInViewport();
+  expect(await editor.evaluate(el=>el.scrollTop)).toBe(0);
+  await bar.getByRole('button',{name:'선택 승인',exact:true}).click();
+  expect(approved).toEqual(['draft-0']);
+  await expect(bar.getByRole('button',{name:'승인 티켓 Mock 등록',exact:true})).toBeEnabled();
+  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.scrollTo(0,1600));
+  await expect(bar.getByRole('button',{name:'선택 승인',exact:true})).toBeInViewport();
+  await expect(bar.getByRole('button',{name:'승인 티켓 Mock 등록',exact:true})).toBeInViewport();
+});

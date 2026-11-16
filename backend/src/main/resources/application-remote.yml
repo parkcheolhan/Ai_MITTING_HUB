@@ -1,0 +1,5 @@
+# Always combine with demo (local H2) or your normal database profile.
+app:
+  remote:
+    token: ${APP_REMOTE_TOKEN:}
+    allowed-origins: ${APP_REMOTE_ALLOWED_ORIGINS:}

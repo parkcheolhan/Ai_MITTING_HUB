@@ -1,0 +1,38 @@
+import {test,expect} from '@playwright/test';
+
+test('clearly shows each processing stage and removes indicators after completion',async({page})=>{
+  const meeting={id:'processing-ui',title:'진행 상태 확인',status:'TRANSCRIBING',createdAt:new Date().toISOString(),drafts:[],epics:[],jobs:[{id:'job',meetingId:'processing-ui',type:'PIPELINE',status:'RUNNING',progress:10,errorMessage:null}],content:{occurredAt:'',projectKey:'SCRUM',participants:[],memo:'',source:'MEDIA',language:'ko',template:'일반',diarization:false,segments:[],minutes:null,items:[],assets:[]}};
+  await page.route('**/api/meetings',route=>route.fulfill({json:[meeting]}));
+  await page.route('**/api/meetings/processing-ui',route=>route.fulfill({json:meeting}));
+  await page.goto('/meetings');
+  await expect(page.locator('.processing-overview')).toContainText('AI가 회의 자료 1건을 처리');
+  await expect(page.locator('tbody .processing-status')).toContainText('음성을 텍스트로 변환 중');
+  await expect(page.locator('tbody progress')).not.toHaveAttribute('value');
+  meeting.status='GENERATING_MINUTES';
+  await expect(page.locator('tbody .processing-status')).toContainText('AI가 회의록 작성 중');
+  await page.getByRole('link',{name:'진행 상태 확인 열기'}).click();
+  await expect(page.locator('.job-banner')).toContainText('AI가 회의록 작성 중');
+  await expect(page.locator('.job-steps li').nth(0)).toContainText('완료');
+  await expect(page.locator('.job-steps li').nth(1)).toContainText('진행 중');
+  await expect(page.locator('.stepper').getByRole('button',{name:'음성 기록',exact:true})).toBeVisible();
+  meeting.status='ANALYZING';
+  await expect(page.locator('.job-banner')).toContainText('AI가 업무 분석 중');
+  meeting.status='GENERATING_TICKETS';
+  await expect(page.locator('.job-banner')).toContainText('AI가 Jira 티켓 정리 중');
+  await expect(page.locator('.job-steps li').last()).toContainText('진행 중');
+  meeting.status='REVIEW_PENDING';meeting.jobs[0].status='COMPLETED';
+  await expect(page.locator('.job-banner')).toHaveCount(0);
+  await expect(page.locator('.job-steps')).toContainText('AI 처리 완료');
+  meeting.status='FAILED';Object.assign(meeting.jobs[0],{status:'FAILED',stage:'GENERATING_TICKETS',errorMessage:'분석 제한 시간 초과'});
+  await expect(page.locator('.job-steps li').last()).toContainText('실패');
+  await expect(page.locator('.job-steps li').nth(2)).toContainText('완료');
+  meeting.status='REVIEW_PENDING';meeting.jobs[0].status='COMPLETED';
+  await page.goto('/meetings');
+  await expect(page.locator('.processing-overview')).toHaveCount(0);
+  await expect(page.locator('tbody .processing-status')).toHaveCount(0);
+  meeting.status='ANALYZING';Object.assign(meeting.jobs[0],{type:'ANALYZE',status:'RUNNING',stage:'ANALYZING',progress:10,errorMessage:null});
+  await page.goto('/meetings/processing-ui?tab=analysis');
+  await expect(page.locator('.job-steps li')).toHaveCount(2);
+  await expect(page.locator('.job-steps li').nth(0).locator('strong')).toHaveText('분석');
+  await expect(page.locator('.job-steps li').nth(1).locator('strong')).toHaveText('티켓구성');
+});

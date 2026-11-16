@@ -1,0 +1,45 @@
+server:
+  port: ${SERVER_PORT:8080}
+  address: ${SERVER_ADDRESS:127.0.0.1}
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/meetinghub}
+    username: ${DATABASE_USER:meetinghub}
+    password: ${DATABASE_PASSWORD:local-development-only}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 101MB
+app:
+  mode: ${APP_MODE:mock}
+  upload-dir: ${UPLOAD_DIR:./data/uploads}
+  secret-key-file: ${APP_SECRET_KEY_FILE:./data/secrets/jira.key}
+  encryption-key: ${APP_ENCRYPTION_KEY:}
+jira:
+  mode: ${JIRA_MODE:mock}
+  site-url: ${JIRA_SITE_URL:}
+  email: ${JIRA_EMAIL:}
+  api-token: ${JIRA_API_TOKEN:}
+  cloud-id: ${JIRA_CLOUD_ID:}
+  default-project: ${JIRA_PROJECT_KEY:}
+ai:
+  mode: ${AI_MODE:openai}
+  model: ${AI_MODEL:gpt-4.1-mini}
+  api-key: ${OPENAI_API_KEY:}
+speech:
+  python: ${SPEECH_PYTHON:}
+  model-dir: ${SPEECH_MODEL_DIR:}
+  timeout-seconds: ${SPEECH_TIMEOUT_SECONDS:3600}
+---
+spring:
+  config:
+    activate:
+      on-profile: demo
+  datasource:
+    url: jdbc:h2:file:./data/demo;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: ''
