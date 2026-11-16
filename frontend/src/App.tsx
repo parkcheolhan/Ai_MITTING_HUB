@@ -464,7 +464,7 @@ function Dashboard() {
 function ProcessingStatus({meeting,compact=false}:{meeting:Meeting;compact?:boolean}) {
   const job=activeJob(meeting);
   if(!job)return null;
-  const title=job.status==="QUEUED"?"AI 처리 대기 중":job.type==="SCHEDULE"?(job.stage==="ALLOCATING_SCHEDULE"?"담당자별 시작·종료 시각 배정 중":"AI가 작업시간·우선순위·선행관계 분석 중"):meeting.status==="IDENTIFYING_SPEAKERS"?"음성별 화자 분석 중":meeting.status==="TRANSCRIBING"?"음성을 텍스트로 변환 중":meeting.status==="GENERATING_MINUTES"?"AI가 회의록 작성 중":meeting.status==="GENERATING_TICKETS"?"AI가 Jira 티켓 정리 중":"AI가 업무 분석 중";
+  const title=job.status==="QUEUED"?"AI 처리 대기 중":job.type==="SCHEDULE"?(job.stage==="ALLOCATING_SCHEDULE"?"담당자별 시작·종료 시각 배정 중":"AI가 작업시간·우선순위·선행관계 분석 중"):meeting.status==="REVIEWING_TRANSCRIPT"?"AI가 음성 기록 문맥 교정 중":meeting.status==="IDENTIFYING_SPEAKERS"?"음성별 화자 분석 중":meeting.status==="TRANSCRIBING"?"음성을 텍스트로 변환 중":meeting.status==="GENERATING_MINUTES"?"AI가 회의록 작성 중":meeting.status==="GENERATING_TICKETS"?"AI가 Jira 티켓 정리 중":"AI가 업무 분석 중";
   return <div className={"processing-status "+(compact?"compact":"")} role="status" aria-live="polite">
     <RefreshCw size={compact?16:24} className="processing-spinner" aria-hidden="true"/>
     <div><strong>{title}</strong>{!compact&&<p>처리가 진행 중입니다. 완료되면 결과가 자동으로 표시됩니다.</p>}

@@ -2313,6 +2313,14 @@ main:has(.ticket-review) > footer { display: none; }
 .transcript-utterance button { display: flex; align-items: center; gap: 14px; padding: 0; border: 0; background: transparent; color: #24573c; }
 .transcript-utterance button span { font-size: 12px; color: #667a6d; }
 .transcript-utterance p { margin: 8px 0 0; white-space: pre-wrap; line-height: 1.9; }
+.transcript-edit-toolbar { padding: 16px 24px; border-top: 1px solid #e2eae5; }
+.transcript-edit-toolbar .actions { flex-wrap: wrap; margin-bottom: 10px; }
+.transcript-edit-toolbar p { margin-bottom: 6px; }
+.transcript-utterance button.transcript-text-fragment { display: inline; color: inherit; font: inherit; line-height: inherit; text-align: left; white-space: pre-wrap; box-shadow: none; border-radius: 3px; }
+.transcript-text-fragment[data-playback-active="true"] { background: #cde8d7 !important; }
+.transcript-text-editor { display: block; margin-top: 12px; color: #667a6d; font-size: 12px; }
+.transcript-text-editor textarea { display: block; margin-top: 6px; line-height: 1.9; font-size: 14px; color: var(--text-primary); }
+.transcript-original { margin-top: 14px; font-size: 13px; color: #657369; }
 .jira-connection-guide { margin: 18px 0 24px; border: 1px solid #dbe5df; border-radius: 10px; background: #f7faf8; overflow: hidden; }
 .jira-connection-guide details { padding: 16px 18px; }
 .jira-connection-guide details + details { border-top: 1px solid #dbe5df; }

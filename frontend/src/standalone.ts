@@ -59,6 +59,22 @@ export async function localApi<T>(path: string, method: string, body?: unknown):
     const m=data.meetings.find(m=>m.id===id);
     if (!m) throw new Error('회의를 찾을 수 없습니다.');
     if (!action && method==='GET') result=m;
+    else if(action==='transcript'&&!subaction&&method==='PUT'){
+      const edits=input.edits as {id:string;originalText:string;text:string}[];
+      if(!Array.isArray(edits)||!edits.length)throw new Error('수정할 발언을 확인하세요.');
+      const changes=new Map<string,string>();
+      for(const edit of edits){
+        const current=m.content.segments.find(s=>s.id===edit.id);
+        if(!current||current.text!==edit.originalText)throw new Error('음성 기록이 변경되었습니다. 최신 기록을 다시 불러오세요.');
+        if(!edit.text?.trim()||changes.has(edit.id))throw new Error('빈 발언이나 중복된 발언을 저장할 수 없습니다.');
+        changes.set(edit.id,edit.text.trim());
+      }
+      const next=m.content.segments.map(s=>({...s,text:changes.get(s.id)??s.text}));
+      if(next.reduce((n,s)=>n+s.text.length,0)>200000)throw new Error('전체 기록은 200,000자 이하여야 합니다.');
+      m.content.originalTranscriptText??={};
+      for(const s of m.content.segments)if(changes.has(s.id)&&s.text!==changes.get(s.id))m.content.originalTranscriptText[s.id]??=s.text;
+      m.content.segments=next;m.content.transcriptRevision=(m.content.transcriptRevision??0)+1;save(data);result=m;
+    }
     else if (!action && method==='DELETE') {data.meetings=data.meetings.filter(m=>m.id!==id);save(data);}
     else if (action==='process' && method==='POST') result=m; // Text is saved; no AI result is fabricated.
     else if (action==='minutes' && !subaction && method==='PUT') {m.content.minutes={...input,version:(m.content.minutes?.version || 0)+1,generationMode:'manual'} as Minutes; save(data);result=m.content.minutes;}

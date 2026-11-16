@@ -60,6 +60,8 @@ public class Api {
     @PostMapping("/meetings/{id}/ticket-drafts/compact") public List<Draft> compact(@PathVariable String id,@Valid @RequestBody CompactPlan input){return consolidation.apply(id,input);}
     @PostMapping("/meetings/{id}/transcribe") public Job transcribe(@PathVariable String id) { return worker.start(id,"TRANSCRIBE"); }
     @GetMapping("/meetings/{id}/transcript") public List<Segment> transcript(@PathVariable String id) { return service.get(id).content().segments; }
+    @PutMapping("/meetings/{id}/transcript") public MeetingView editTranscript(@PathVariable String id,@Valid @RequestBody TranscriptTextInput input){return service.editTranscript(id,input);}
+    @PostMapping("/meetings/{id}/transcript/review") public Job reviewTranscript(@PathVariable String id){return worker.start(id,"TRANSCRIPT_REVIEW");}
     @PutMapping("/meetings/{id}/transcript/timing") public MeetingView timing(@PathVariable String id,@Valid @RequestBody TranscriptTiming input) { return service.setTranscriptTiming(id,input); }
     @PostMapping("/meetings/{id}/speakers/analyze") public Job speakers(@PathVariable String id){return worker.start(id,"SPEAKERS");}
     @PutMapping("/meetings/{id}/participants") public MeetingView participants(@PathVariable String id,@Valid @RequestBody ParticipantsInput input){return service.setParticipants(id,input);}

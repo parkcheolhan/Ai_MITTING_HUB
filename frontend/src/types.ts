@@ -101,6 +101,8 @@ export type Meeting = {
     template: string;
     diarization: boolean;
     segments: Segment[];
+    originalTranscriptText?: Record<string,string>;
+    transcriptRevision?: number;
     speakerGroups?: Record<string,string>;
     minutes: Minutes | null;
     items: Item[];
@@ -127,6 +129,7 @@ export const statusName: Record<string, string> = {
   ESTIMATING_SCHEDULE:"AI 작업시간 분석 중",
   ALLOCATING_SCHEDULE:"담당자별 일정 배정 중",
   REVIEW_PENDING: "검토 대기",
+  REVIEWING_TRANSCRIPT: "음성 기록 문맥 교정 중",
   COMPLETED: "완료",
   FAILED: "실패",
   CANCELLED: "취소됨",

@@ -7,7 +7,7 @@ $files=@(
   'frontend/scripts/build-html.mjs','frontend/scripts/test-pages.mjs','frontend/scripts/test-html.mjs','frontend/playwright.config.ts',
   'backend/pom.xml','backend/mvnw','backend/mvnw.cmd','backend/.mvn/wrapper/maven-wrapper.properties',
   'scripts/setup-speech.ps1','scripts/setup-speech.sh','scripts/install-tunnel.ps1','scripts/start-remote.ps1','scripts/stop-remote.ps1','scripts/package-github.ps1','scripts/github-pages.yml',
-  'docs/github-local-server.md'
+  'docs/github-local-server.md','docs/transcript-review.md'
 )
 foreach($folder in @('frontend/src','frontend/e2e','backend/src')){
   $files+=Get-ChildItem -LiteralPath (Join-Path $taskRoot $folder) -Recurse -File | Where-Object {$_.FullName -notmatch '[\\/]__pycache__[\\/]' -and $_.Extension -notin @('.pyc','.key','.db','.log','.m4a','.mp4','.mp3','.wav','.webm')} | ForEach-Object {$_.FullName.Substring($taskRoot.Length+1).Replace('\','/')}

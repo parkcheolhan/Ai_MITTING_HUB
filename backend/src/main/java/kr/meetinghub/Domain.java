@@ -14,6 +14,8 @@ public final class Domain {
     public record Segment(String id, String speaker, long startMs, long endMs, String text,
                           boolean estimatedTime) {}
     public record TranscriptTiming(@Min(0) @Max(86400000) long startMs, @Min(1000) @Max(14400000) long intervalMs) {}
+    public record TranscriptTextEdit(@NotBlank String id,@NotNull String originalText,@NotBlank @Size(max=200000) String text) {}
+    public record TranscriptTextInput(@NotEmpty @Size(max=3000) List<@Valid TranscriptTextEdit> edits) {}
     public record MinutesTemplateInput(@NotBlank @Size(max=20000) String template) {}
     public record ParticipantsInput(@NotNull @Size(max=100) List<@NotBlank @Size(max=100) String> participants,@NotNull @Size(max=3000) Map<String,String> segmentSpeakers) {}
     public record Evidence(String segmentId, long startMs, String speaker, String quote,
@@ -38,6 +40,8 @@ public final class Domain {
         public String generationMode="mock",generationModel="rules";
     }
     public static class Content {
+        public Map<String,String> originalTranscriptText = new LinkedHashMap<>();
+        public int transcriptRevision;
         public String occurredAt = "", projectKey = "DEMO", memo = "", source = "TEXT", language = "ko", template = "일반";
         public boolean diarization;
         public List<String> participants = new ArrayList<>();

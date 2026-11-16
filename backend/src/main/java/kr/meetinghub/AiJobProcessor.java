@@ -16,12 +16,13 @@ public class AiJobProcessor {
         try {
             var initial=jobs.findById(id).orElseThrow();
             if(initial.type.equals("SCHEDULE")){scheduling.run(id);return;}
-            var ai=Set.of("TRANSCRIBE","SPEAKERS").contains(initial.type)?new Adapters.MockIntelligence():service.intelligence().snapshot();
+            var ai=initial.type.equals("SPEAKERS")?new Adapters.MockIntelligence():service.intelligence().snapshot();
             var stages=switch(initial.type){
-                case "TRANSCRIBE"->List.of("TRANSCRIBING");case "MINUTES"->List.of("GENERATING_MINUTES");
+                case "TRANSCRIBE"->List.of("TRANSCRIBING","REVIEWING_TRANSCRIPT");case "MINUTES"->List.of("GENERATING_MINUTES");
+                case "TRANSCRIPT_REVIEW"->List.of("REVIEWING_TRANSCRIPT");
                 case "SPEAKERS"->List.of("IDENTIFYING_SPEAKERS");
                 case "ANALYZE"->List.of("ANALYZING","GENERATING_TICKETS");case "TICKETS","REVIEW"->List.of("GENERATING_TICKETS");
-                default->List.of("TRANSCRIBING","GENERATING_MINUTES","ANALYZING","GENERATING_TICKETS");
+                default->List.of("TRANSCRIBING","REVIEWING_TRANSCRIPT","GENERATING_MINUTES","ANALYZING","GENERATING_TICKETS");
             };
             for(int index=0;index<stages.size();index++){
                 String stage=stages.get(index);int progress=10+index*80/stages.size();
@@ -48,6 +49,7 @@ public class AiJobProcessor {
                 Object computed=switch(stage){
                     case "TRANSCRIBING"->speech.transcribe(input.content(),()->jobs.findById(id).map(j->j.status.equals("CANCELLED")).orElse(true));
                     case "IDENTIFYING_SPEAKERS"->speech.identifySpeakers(input.content(),()->jobs.findById(id).map(j->j.status.equals("CANCELLED")).orElse(true));
+                    case "REVIEWING_TRANSCRIPT"->ai.reviewTranscript(input.meeting().title,input.content().segments,()->jobs.findById(id).map(j->j.status.equals("CANCELLED")).orElse(true));
                     case "GENERATING_MINUTES"->ai.minutes(input.meeting().title,input.content().segments);
                     case "ANALYZING"->ai.analyze(input.content().segments);
                     case "GENERATING_TICKETS"->input.selected().isEmpty()?List.<TicketProposal>of():ai.tickets(input.meeting().title,input.content().minutes,input.content().segments,input.selected(),
@@ -70,6 +72,10 @@ public class AiJobProcessor {
             if(input.draft()!=null)service.drafts().locked(input.draft().id).orElseThrow(MeetingService::missing);
             var m=service.lock(j.meetingId);var c=service.content(m);
             switch(stage){
+                case "REVIEWING_TRANSCRIPT"->{
+                    MeetingService.require(c.segments.equals(input.content().segments),"교정 중 음성 기록이 변경되어 적용을 중단했습니다.");
+                    MeetingService.applyTranscriptText(c,(List<Segment>)computed);
+                }
                 case "TRANSCRIBING"->{c.segments=(List<Segment>)computed;c.segments.forEach(segment->c.speakerGroups.putIfAbsent(segment.id(),segment.speaker()));c.diarization=c.segments.stream().anyMatch(segment->segment.speaker().matches(".*화자 [0-9]+"));}
                 case "IDENTIFYING_SPEAKERS"->{c.segments=(List<Segment>)computed;c.diarization=true;c.speakerGroups.clear();c.segments.forEach(segment->c.speakerGroups.put(segment.id(),segment.speaker()));service.syncEvidenceSpeakers(c);}
                 case "GENERATING_MINUTES"->{

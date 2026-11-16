@@ -11,6 +11,8 @@ public final class Adapters {
     private Adapters() {}
     public interface SpeechToText { List<Segment> transcribe(Content content);default List<Segment> transcribe(Content content,java.util.function.BooleanSupplier cancelled){return transcribe(content);} default List<Segment> identifySpeakers(Content content,java.util.function.BooleanSupplier cancelled){throw new IllegalArgumentException("이 음성 엔진은 화자 분석을 지원하지 않습니다.");} }
     public interface Intelligence {
+        default List<Segment> reviewTranscript(String title,List<Segment> segments){return segments;}
+        default List<Segment> reviewTranscript(String title,List<Segment> segments,java.util.function.BooleanSupplier cancelled){return reviewTranscript(title,segments);}
         Minutes minutes(String title,List<Segment> segments);
         List<Item> analyze(List<Segment> segments);
         default Intelligence snapshot(){return this;}

@@ -11,6 +11,7 @@ public class ConfiguredIntelligence implements Adapters.Intelligence {
     public ConfiguredIntelligence(AiSettingsStore settings,ObjectMapper json){this.settings=settings;this.json=json;}
     @Override public Adapters.Intelligence snapshot(){var config=settings.current();return config.mode().equals("mock")?new Adapters.MockIntelligence():config.mode().equals("codex")?new CodexIntelligence(config,json):new OpenAiIntelligence(config,json);}
     @Override public String mode(){return settings.view().get("mode").toString();}
+    @Override public List<Segment> reviewTranscript(String title,List<Segment> segments){return snapshot().reviewTranscript(title,segments);}
     @Override public String model(){return settings.view().get("model").toString();}
     @Override public List<ScheduleAssessment> schedule(List<ScheduleTask> tasks,List<SchedulePriority> priorities){return snapshot().schedule(tasks,priorities);}
     @Override public Minutes minutes(String title,List<Segment> segments){return snapshot().minutes(title,segments);}

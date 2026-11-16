@@ -13,7 +13,8 @@ test('clearly shows each processing stage and removes indicators after completio
   await page.getByRole('link',{name:'진행 상태 확인 열기'}).click();
   await expect(page.locator('.job-banner')).toContainText('AI가 회의록 작성 중');
   await expect(page.locator('.job-steps li').nth(0)).toContainText('완료');
-  await expect(page.locator('.job-steps li').nth(1)).toContainText('진행 중');
+  await expect(page.locator('.job-steps li').nth(1)).toContainText('AI 음성 기록 문맥 교정');
+  await expect(page.locator('.job-steps li').nth(2)).toContainText('진행 중');
   await expect(page.locator('.stepper').getByRole('button',{name:'음성 기록',exact:true})).toBeVisible();
   meeting.status='ANALYZING';
   await expect(page.locator('.job-banner')).toContainText('AI가 업무 분석 중');

@@ -1,10 +1,10 @@
 import {type Meeting} from "./types";
 
-const labels: Record<string,string> = {TRANSCRIBING:"음성 기록 준비",GENERATING_MINUTES:"회의록 작성",ANALYZING:"분석",GENERATING_TICKETS:"티켓구성",ESTIMATING_SCHEDULE:"작업량·우선순위·선행관계 분석",ALLOCATING_SCHEDULE:"담당자별 일정 배정"};
+const labels: Record<string,string> = {TRANSCRIBING:"음성 기록 준비",REVIEWING_TRANSCRIPT:"AI 음성 기록 문맥 교정",GENERATING_MINUTES:"회의록 작성",ANALYZING:"분석",GENERATING_TICKETS:"티켓구성",ESTIMATING_SCHEDULE:"작업량·우선순위·선행관계 분석",ALLOCATING_SCHEDULE:"담당자별 일정 배정"};
 export default function JobSteps({meeting}: {meeting: Meeting}) {
   const job=meeting.jobs[0];
   if(!job)return null;
-  const stages=job.type==="SCHEDULE"?["ESTIMATING_SCHEDULE","ALLOCATING_SCHEDULE"]:job.type==="SPEAKERS"?["IDENTIFYING_SPEAKERS"]:job.type==="TRANSCRIBE"?["TRANSCRIBING"]:job.type==="MINUTES"?["GENERATING_MINUTES"]:job.type==="ANALYZE"?["ANALYZING","GENERATING_TICKETS"]:["TICKETS","REVIEW"].includes(job.type)?["GENERATING_TICKETS"]:["TRANSCRIBING","GENERATING_MINUTES","ANALYZING","GENERATING_TICKETS"];
+  const stages=job.type==="SCHEDULE"?["ESTIMATING_SCHEDULE","ALLOCATING_SCHEDULE"]:job.type==="SPEAKERS"?["IDENTIFYING_SPEAKERS"]:job.type==="TRANSCRIPT_REVIEW"?["REVIEWING_TRANSCRIPT"]:job.type==="TRANSCRIBE"?["TRANSCRIBING","REVIEWING_TRANSCRIPT"]:job.type==="MINUTES"?["GENERATING_MINUTES"]:job.type==="ANALYZE"?["ANALYZING","GENERATING_TICKETS"]:["TICKETS","REVIEW"].includes(job.type)?["GENERATING_TICKETS"]:["TRANSCRIBING","REVIEWING_TRANSCRIPT","GENERATING_MINUTES","ANALYZING","GENERATING_TICKETS"];
   const stage=job.stage||meeting.status;
   const position=stages.indexOf(stage);
   const current=position>=0?position:Math.max(0,Math.min(stages.length-1,Math.round((job.progress-10)*stages.length/80)));

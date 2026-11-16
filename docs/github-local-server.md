@@ -6,6 +6,8 @@ GitHub Pages: https://parkcheolhan.github.io/Ai_MITTING_HUB/
 
 화면은 GitHub Pages에서 제공하고, 회의·첨부파일·AI 분석·음성 변환·Jira 연결은 내 PC의 Java 서버에서 처리합니다. 서버 데이터는 GitHub에 저장되지 않습니다. 앞서 만든 브라우저 저장용 standalone HTML과 다른 **서버 연결 버전**입니다.
 
+[음성 기록 편집·같은 화자 묶음 표시·AI 문맥 교정 사용 방법](transcript-review.md)
+
 ## GitHub 업로드 및 Pages 활성화
 
 준비된 `github` 폴더의 **내용물**을 저장소 최상위에 올리세요. `github` 폴더 자체를 최상위 폴더로 올리지 마세요. `index.html`, `frontend`, `backend`, `scripts`, `.github/workflows/pages.yml`, `.nojekyll` 등이 최상위에 있어야 합니다. 숨김 파일도 포함하세요.

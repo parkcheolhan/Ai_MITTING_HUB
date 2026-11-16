@@ -74,6 +74,32 @@ public class MeetingService {
         c.segments=segments;c.items=retimeItems(c.items,timings);c.archivedItems=retimeItems(c.archivedItems,timings);
         save(m,c);audits.save(new Audit("TRANSCRIPT_TIMING_UPDATED",id));return view(m);
     }
+    public MeetingView editTranscript(String id,TranscriptTextInput input){
+        var m=lock(id);editable(m);var c=content(m);
+        var current=new HashMap<String,Segment>();c.segments.forEach(s->current.put(s.id(),s));
+        var texts=new LinkedHashMap<String,String>();
+        require(input.edits()!=null&&!input.edits().isEmpty()&&input.edits().size()<=3000,"수정할 발언을 확인하세요.");
+        for(var edit:input.edits()){
+            var segment=current.get(edit.id());
+            require(segment!=null,"이 회의에 없는 발언은 수정할 수 없습니다.");
+            require(Objects.equals(segment.text(),edit.originalText()),"다른 작업에서 음성 기록이 변경되었습니다. 편집을 취소하고 최신 기록을 다시 불러오세요.");
+            require(edit.text()!=null&&!edit.text().isBlank()&&texts.putIfAbsent(edit.id(),edit.text().strip())==null,"발언은 비워 두거나 중복 지정할 수 없습니다.");
+        }
+        var next=c.segments.stream().map(s->new Segment(s.id(),s.speaker(),s.startMs(),s.endMs(),texts.getOrDefault(s.id(),s.text()),s.estimatedTime())).toList();
+        applyTranscriptText(c,next);save(m,c);audits.save(new Audit("TRANSCRIPT_TEXT_EDITED",id));return view(m);
+    }
+    static void applyTranscriptText(Content c,List<Segment> next){
+        require(next.size()==c.segments.size(),"교정 결과의 발언 수가 변경되었습니다.");
+        require(next.stream().mapToLong(s->s.text().length()).sum()<=200000,"전체 음성 기록은 200,000자 이하여야 합니다.");
+        boolean changed=false;
+        for(int i=0;i<next.size();i++){
+            var old=c.segments.get(i);var updated=next.get(i);
+            require(Objects.equals(old.id(),updated.id())&&Objects.equals(old.speaker(),updated.speaker())&&old.startMs()==updated.startMs()&&old.endMs()==updated.endMs()&&old.estimatedTime()==updated.estimatedTime(),"교정은 발언 내용만 변경할 수 있습니다.");
+            require(updated.text()!=null&&!updated.text().isBlank(),"교정 결과에 빈 발언이 있습니다.");
+            if(!old.text().equals(updated.text())){c.originalTranscriptText.putIfAbsent(old.id(),old.text());changed=true;}
+        }
+        if(changed){c.segments=new ArrayList<>(next);c.transcriptRevision++;}
+    }
     public MeetingView setParticipants(String id,ParticipantsInput input){
         var m=lock(id);editable(m);var c=content(m);var names=input.participants().stream().map(String::strip).distinct().toList();
         boolean refreshDocument=c.minutes!=null&&MinutesTemplate.custom(c.template)&&Objects.equals(c.minutes.formatted,MinutesTemplate.render(m.title,c,c.minutes));
