@@ -21,15 +21,15 @@ class TranscriptReviewTest {
         });
         assertThat(ai.reviewTranscript("자막 초안 검토",List.of(original))).containsExactly(new Segment(original.id(),original.speaker(),1000,7000,corrected,false));
     }
-    @Test void rejectsFabricatedIdsStaleOriginalsRepeatedEditsAndChangedNumbers(){
+    @Test void rejectsFabricatedIdsStaleOriginalsAndRepeatedEdits(){
         var numbered=new Segment("s","김민수",0,1000,"3개를 확인했으면 좋겠습니다.",false);
-        for(var edits:List.of(List.of(edit("unknown",numbered.text(),"수정")),List.of(edit("s","다른 원문","수정")),List.of(edit("s",numbered.text(),"4개를 확인했으면 좋겠습니다.")),List.of(edit("s",numbered.text(),numbered.text()),edit("s",numbered.text(),numbered.text())))){
+        for(var edits:List.of(List.of(edit("unknown",numbered.text(),"수정")),List.of(edit("s","다른 원문","수정")),List.of(edit("s",numbered.text(),numbered.text()),edit("s",numbered.text(),numbered.text())))){
             var ai=new OpenAiIntelligence(config,json,(key,body)->OpenAiIntelligenceTest.reply(json,Map.of("segments",edits)));
             assertThatThrownBy(()->ai.reviewTranscript("검토",List.of(numbered))).isInstanceOf(IllegalArgumentException.class);
         }
     }
     @Test void batchesLongTranscriptsAndStopsCallingAfterCancellation(){
-        var source=java.util.stream.IntStream.range(0,61).mapToObj(i->new Segment("s"+i,"화자 1",i*1000,(i+1)*1000,"검토할 발언",false)).toList();
+        var source=java.util.stream.IntStream.range(0,121).mapToObj(i->new Segment("s"+i,"화자 1",i*1000,(i+1)*1000,"검토할 발언",false)).toList();
         var calls=new AtomicInteger();
         var ai=new OpenAiIntelligence(config,json,(key,body)->{calls.incrementAndGet();var input=json.readTree(json.readTree(body).path("input").asText());var reviewed=new ArrayList<Map<String,Object>>();for(var segment:input.path("segments"))reviewed.add(Map.of("segmentId",segment.path("id").asText(),"originalText",segment.path("text").asText(),"text",segment.path("text").asText(),"reason",""));return OpenAiIntelligenceTest.reply(json,Map.of("segments",reviewed));});
         assertThat(ai.reviewTranscript("긴 회의",source)).isEqualTo(source);assertThat(calls.get()).isEqualTo(3);
@@ -41,5 +41,12 @@ class TranscriptReviewTest {
             var ai=new OpenAiIntelligence(config,json,(key,body)->OpenAiIntelligenceTest.reply(json,Map.of("segments",result)));
             assertThatThrownBy(()->ai.reviewTranscript("전체 대화",List.of(original,second))).isInstanceOf(IllegalArgumentException.class);
         }
+    }
+    @Test void numericRewritesKeepOriginalWhileSafeDialogueEditsAreApplied(){
+        var numbered=new Segment("number","화자 2",7000,9000,"3개를 확인했으면 좋겠습니다.",false);
+        String revised="이번 주에는 자막 입힌 걸로 주간보고 때 초안을 한 번 봤으면 좋겠는데";
+        var ai=new OpenAiIntelligence(config,json,(key,body)->OpenAiIntelligenceTest.reply(json,Map.of("segments",List.of(edit(original.id(),original.text(),revised),edit(numbered.id(),numbered.text(),"4개를 확인했으면 좋겠습니다.")))));
+        var result=ai.reviewTranscript("대화 문맥",List.of(original,numbered));
+        assertThat(result.get(0).text()).isEqualTo(revised);assertThat(result.get(1)).isEqualTo(numbered);
     }
 }
