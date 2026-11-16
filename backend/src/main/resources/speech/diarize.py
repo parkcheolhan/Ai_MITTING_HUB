@@ -1,24 +1,35 @@
 """Local speaker segmentation and clustering. Labels are anonymous, never names."""
 from pathlib import Path
+from contextlib import chdir
 
 # Prefer merging similar voices over splitting one person across many labels.
 # sherpa-onnx: a larger distance threshold produces fewer speaker clusters.
 SPEAKER_CLUSTER_THRESHOLD = 1.0
 
-def identify(audio, segments, model_dir):
+def load_engine(model_dir):
     import sherpa_onnx
-    model_dir = Path(model_dir)
-    config = sherpa_onnx.OfflineSpeakerDiarizationConfig(
-        segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
-            pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(
-                model=str(model_dir / "segmentation.onnx")), num_threads=2),
-        embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(
-            model=str(model_dir / "embedding.onnx"), num_threads=2),
-        clustering=sherpa_onnx.FastClusteringConfig(num_clusters=-1, threshold=SPEAKER_CLUSTER_THRESHOLD),
-        min_duration_on=0.3, min_duration_off=0.5)
-    if not config.validate():
+    model_dir = Path(model_dir).resolve()
+    if not all((model_dir / name).is_file() for name in ("segmentation.onnx", "embedding.onnx")):
         raise ValueError("SPEAKER_MODEL_MISSING")
-    engine = sherpa_onnx.OfflineSpeakerDiarization(config)
+    # sherpa-onnx on Windows cannot open Unicode absolute paths. Python can
+    # enter that directory; ASCII filenames then work, including across drives.
+    # Each Java speech job runs this in its own Python process.
+    with chdir(model_dir):
+        config = sherpa_onnx.OfflineSpeakerDiarizationConfig(
+            segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
+                pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(
+                    model="segmentation.onnx"), num_threads=2),
+            embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(
+                model="embedding.onnx", num_threads=2),
+            clustering=sherpa_onnx.FastClusteringConfig(num_clusters=-1, threshold=SPEAKER_CLUSTER_THRESHOLD),
+            min_duration_on=0.3, min_duration_off=0.5)
+        if not config.validate():
+            raise ValueError("SPEAKER_MODEL_MISSING")
+        return sherpa_onnx.OfflineSpeakerDiarization(config)
+
+
+def identify(audio, segments, model_dir):
+    engine = load_engine(model_dir)
     turns = engine.process(audio).sort_by_start_time()
     labels = {}
     for segment in segments:

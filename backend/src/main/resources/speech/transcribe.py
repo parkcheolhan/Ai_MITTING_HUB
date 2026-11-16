@@ -9,6 +9,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-dir", required=True)
     parser.add_argument("--prepare", action="store_true")
+    parser.add_argument("--check-speakers", action="store_true")
     parser.add_argument("--input")
     parser.add_argument("--output")
     parser.add_argument("--language", default="ko")
@@ -16,6 +17,11 @@ def main():
     parser.add_argument("--segments")
     args = parser.parse_args()
     try:
+        if args.check_speakers:
+            from diarize import load_engine
+            engine = load_engine(args.speaker_dir)
+            print(json.dumps({"speakerReady": True, "sampleRate": engine.sample_rate}))
+            return
         if args.prepare:
             from faster_whisper.utils import download_model
             download_model("small", output_dir=args.model_dir)

@@ -9,4 +9,6 @@ if (-not (Test-Path -LiteralPath $speechPython)) {
 if ($LASTEXITCODE -ne 0) { throw 'Speech engine installation failed.' }
 & $speechPython (Join-Path $speechRoot 'backend/src/main/resources/speech/transcribe.py') --prepare --model-dir (Join-Path $speechRoot '.tools/speech-models/small') --speaker-dir (Join-Path $speechRoot '.tools/speech-models/speakers')
 if ($LASTEXITCODE -ne 0) { throw 'Speech model download failed. Check network access and retry.' }
+& $speechPython (Join-Path $speechRoot 'backend/src/main/resources/speech/transcribe.py') --check-speakers --model-dir (Join-Path $speechRoot '.tools/speech-models/small') --speaker-dir (Join-Path $speechRoot '.tools/speech-models/speakers')
+if ($LASTEXITCODE -ne 0) { throw 'Speaker models exist but cannot be loaded. Check model files and engine installation.' }
 Write-Output 'Local speech transcription is ready. No API key is required.'
