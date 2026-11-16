@@ -28,6 +28,19 @@ try {
   await page.getByText('직접 작성한 주요 안건',{exact:true}).waitFor();
   await page.reload();
   await page.getByText('직접 작성한 주요 안건',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'회의록 양식 지정',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'회의록 양식 지정'});
+  assert.equal(await dialog.getByLabel('회의록 양식 목록').getByRole('button').count(),5);
+  await dialog.getByLabel('양식 파일 업로드').setInputFiles({name:'로컬-양식.md',mimeType:'text/markdown',buffer:Buffer.from('# 로컬 회의록\n{{회의명}}\n## 주요 안건\n{{요약}}')});
+  await dialog.getByRole('button',{name:'로컬-양식.md',exact:true}).waitFor();
+  await dialog.getByRole('button',{name:'선택한 양식 적용',exact:true}).click();
+  await page.getByRole('article',{name:'회의록 문서'}).getByRole('heading',{name:'로컬 회의록',exact:true}).waitFor();
+  assert((await page.getByRole('article',{name:'회의록 문서'}).innerText()).includes('직접 작성한 주요 안건'));
+  await page.reload();await page.getByRole('button',{name:'회의록 양식 지정',exact:true}).click();
+  await dialog.getByRole('button',{name:'로컬-양식.md',exact:true}).waitFor();
+  assert.equal(await dialog.getByLabel('회의록 양식 목록').getByRole('button').count(),6);
+  assert.equal(await dialog.getByRole('button',{name:'로컬-양식.md',exact:true}).getAttribute('aria-pressed'),'true');
+  await dialog.getByRole('button',{name:'취소',exact:true}).click();
   await page.goto(meetingUrl+'?tab=transcript');
   await page.getByText('두 번째 발언',{exact:true}).first().waitFor();
   const download=page.waitForEvent('download');
@@ -38,5 +51,5 @@ try {
   assert.equal(await page.locator('h1').count(),1);
   assert.deepEqual(errors,[]);
   assert.deepEqual(network,[]);
-  console.log('PASS: file:// project, meeting, transcript, minutes save/reload, backup, mobile render; no network or browser errors');
+  console.log('PASS: file:// project, meeting, transcript, minutes save/reload, five template presets, uploaded template persistence/application, backup, mobile render; no network or browser errors');
 } finally {await browser.close();}

@@ -12,7 +12,7 @@ import AssigneeSelect, {type JiraUser} from "./AssigneeSelect";
 import AutoSizeTextarea from "./AutoSizeTextarea";
 import SchedulePanel, {displayDateTime,localDateTime,offsetDateTime} from "./SchedulePanel";
 import {ensureAiSchedule} from "./ensureAiSchedule";
-import MinutesTemplate, { downloadText } from "./MinutesTemplate";
+import { MinutesTemplateDialog, downloadText } from "./MinutesTemplate";
 import SettingsPage from "./JiraSettingsPage";
 import ProjectSpacesPage, {type ProjectSpace} from "./ProjectSpacesPage";
 import { useAiSettings } from "./ai";
@@ -988,7 +988,6 @@ function MinutesEditor({
 }) {
   const [editing,setEditing]=useState(false);
   const [templateOpen,setTemplateOpen]=useState(false);
-  const [template,setTemplate]=useState(meeting.content.template||"일반");
   const [templateBusy,setTemplateBusy]=useState(false);
   const [templateApplied,setTemplateApplied]=useState(false);
   const [minutes, setMinutes] = useState<Minutes | null>(
@@ -1019,14 +1018,14 @@ function MinutesEditor({
       setSaving(false);
     }
   }
-  async function applyTemplate(){
+  async function applyTemplate(template:string){
     setTemplateBusy(true);setError("");setTemplateApplied(false);setSaved(false);
     try{
       const result=await api<Meeting>(`/meetings/${meeting.id}/minutes/template`,"PUT",{template});
       setMinutes(result.content.minutes);setEditing(false);
       if(!result.content.minutes)await api(`/meetings/${meeting.id}/minutes/generate`,"POST");
       await reload();setTemplateApplied(true);setTemplateOpen(false);
-    }catch(e){setError((e as Error).message);}finally{setTemplateBusy(false);}
+    }catch(e){setError((e as Error).message);throw e;}finally{setTemplateBusy(false);}
   }
   return (
     <div className="panel padded minutes-view">
@@ -1041,7 +1040,7 @@ function MinutesEditor({
           </p>
         </div>
         <div className="actions">
-          <button disabled={disabled||saving||templateBusy||editing} onClick={()=>{setTemplate(meeting.content.template||"일반");setTemplateOpen(v=>!v);setTemplateApplied(false);}}>회의록 양식 업로드</button>
+          <button disabled={disabled||saving||templateBusy||editing} onClick={()=>{setTemplateOpen(true);setTemplateApplied(false);}}>회의록 양식 지정</button>
           <button onClick={generate} disabled={disabled||templateBusy||saving||editing}>
             회의록 생성
           </button>
@@ -1059,11 +1058,7 @@ function MinutesEditor({
         </div>
       </div>
       <ErrorBox error={error} />
-      {templateOpen&&<div className="panel padded">
-        <MinutesTemplate numbered={false} value={template} onChange={setTemplate} disabled={disabled||templateBusy}/>
-        <p className="help">기존 회의록 내용을 선택한 양식에 맞춰 배치합니다. 편집한 문서의 배치는 새 양식으로 교체됩니다. 회의록이 없으면 선택한 양식으로 AI 작성을 시작합니다.</p>
-        <div className="form-actions"><button disabled={templateBusy} onClick={()=>setTemplateOpen(false)}>닫기</button><button className="primary" disabled={disabled||templateBusy} onClick={()=>void applyTemplate()}>{templateBusy?"양식 적용 중…":"선택한 양식으로 회의록 작성"}</button></div>
-      </div>}
+      {templateOpen&&<MinutesTemplateDialog value={meeting.content.template||"일반"} onApply={applyTemplate} onClose={()=>setTemplateOpen(false)} disabled={disabled} applying={templateBusy}/>}
       {templateApplied&&<p className="help" role="status">회의록 양식을 적용했습니다.</p>}
       {saved&&<p className="help" role="status">회의록을 저장했습니다.</p>}
       {editing&&<p className="minutes-edit-help">문서 순서대로 각 항목을 편집하세요. 입력 영역의 오른쪽 아래를 끌어 높이를 조절할 수 있습니다. 편집 후 상단의 ‘회의록 저장’을 누르세요.</p>}

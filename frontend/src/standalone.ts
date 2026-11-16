@@ -1,8 +1,9 @@
 import type { Meeting, Minutes } from './types';
+import { validateTemplateText, type SavedMinutesTemplate } from './minutesTemplateCatalog';
 
 export const standalone = (globalThis as { MOA_STANDALONE?: boolean }).MOA_STANDALONE === true;
 const storageKey = 'moa-standalone-v1';
-type Store = { meetings: Meeting[]; projects: {key:string;name:string;description:string;createdAt:string}[] };
+type Store = { meetings: Meeting[]; projects: {key:string;name:string;description:string;createdAt:string}[]; minutesTemplates?:SavedMinutesTemplate[] };
 function load(): Store {
   const raw = localStorage.getItem(storageKey);
   return raw ? JSON.parse(raw) : { meetings: [], projects: [] };
@@ -20,7 +21,9 @@ export async function restoreLocalData(file: File) {
   const data = JSON.parse(await file.text());
   if (!Array.isArray(data.meetings) || !Array.isArray(data.projects) ||
       data.meetings.some((m: Meeting)=>!m.id || !m.title || !Array.isArray(m.jobs) || !Array.isArray(m.drafts) || !Array.isArray(m.content?.segments) || !Array.isArray(m.content?.items) || !Array.isArray(m.content?.assets) || !Array.isArray(m.content?.participants)) ||
-      data.projects.some((p: {key:string;name:string})=>!p.key || !p.name)) throw new Error('모아 백업 파일 형식이 아닙니다.');
+      data.projects.some((p: {key:string;name:string})=>!p.key || !p.name) ||
+      (data.minutesTemplates!==undefined&&(!Array.isArray(data.minutesTemplates)||data.minutesTemplates.some((t:SavedMinutesTemplate)=>!t.id||!t.name||typeof t.template!=='string')))) throw new Error('모아 백업 파일 형식이 아닙니다.');
+  data.minutesTemplates?.forEach((t:SavedMinutesTemplate)=>validateTemplateText(t.template));
   save(data);
   location.reload();
 }
@@ -33,7 +36,16 @@ export async function localApi<T>(path: string, method: string, body?: unknown):
   const route = url.pathname;
   const input = (body || {}) as Record<string, any>;
   let result: unknown;
-  if (route === '/settings/ai' && method === 'GET') result={mode:'openai',model:'서버 연결 필요',configured:false,keyConfigured:false};
+  if(route==='/minutes-templates'&&method==='GET')result=data.minutesTemplates||[];
+  else if(route==='/minutes-templates'&&method==='POST'){
+    const name=String(input.name||'').trim(),template=String(input.template||'').replace(/^\uFEFF/,'');
+    if(!name||name.length>255)throw new Error('양식 이름은 255자 이하로 입력하세요.');
+    validateTemplateText(template);
+    data.minutesTemplates??=[];
+    result=data.minutesTemplates.find(t=>t.template===template);
+    if(!result){result={id:crypto.randomUUID(),name,template,createdAt:new Date().toISOString()};data.minutesTemplates.push(result as SavedMinutesTemplate);save(data);}
+  }
+  else if (route === '/settings/ai' && method === 'GET') result={mode:'openai',model:'서버 연결 필요',configured:false,keyConfigured:false};
   else if (route === '/settings' && method === 'GET') result={mode:'cloud',siteUrl:'',defaultProject:'',configured:false,tokenConfigured:false,missing:['Java 서버 연결 필요']};
   else if (route === '/settings/ai/codex/login' && method === 'GET') result={status:'UNAVAILABLE',message:unavailable};
   else if (route === '/integrations/speech' && method === 'GET') result={ready:false,message:unavailable};
@@ -77,6 +89,18 @@ export async function localApi<T>(path: string, method: string, body?: unknown):
     }
     else if (!action && method==='DELETE') {data.meetings=data.meetings.filter(m=>m.id!==id);save(data);}
     else if (action==='process' && method==='POST') result=m; // Text is saved; no AI result is fabricated.
+    else if(action==='minutes'&&subaction==='template'&&method==='PUT'){
+      const template=String(input.template||'일반');
+      if(template!=='일반')validateTemplateText(template);
+      m.content.template=template;
+      if(m.content.minutes){
+        const minutes=m.content.minutes;
+        const fields:Record<string,string>={회의명:m.title,회의일시:m.content.occurredAt||'',참석자:m.content.participants.join(', '),메모:m.content.memo||'',개요:minutes.overview,요약:minutes.summary,논의사항:minutes.discussion,결정사항:minutes.decisions,미결사항:minutes.openQuestions,후속조치:minutes.followUp};
+        minutes.formatted=template==='일반'?'':template.replace(/\{\{\s*([^{}]+?)\s*}}/g,(_,key:string)=>fields[key.trim()]?.trim()||'기록 없음');
+        minutes.version++;
+      }
+      save(data);result=m;
+    }
     else if (action==='minutes' && !subaction && method==='PUT') {m.content.minutes={...input,version:(m.content.minutes?.version || 0)+1,generationMode:'manual'} as Minutes; save(data);result=m.content.minutes;}
     else if (action==='participants' && method==='PUT') {
       m.content.participants=input.participants;

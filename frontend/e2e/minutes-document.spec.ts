@@ -5,6 +5,7 @@ for(const custom of [false,true])test(`reads ${custom?'uploaded':'basic'} minute
   const meeting={id:'document',title:'주간 업무 회의',status:'REVIEW_PENDING',createdAt:'2026-11-09T00:00:00Z',drafts:[],jobs:[],epics:[],content:{occurredAt:'2026-11-09T10:00',projectKey:'DEMO',participants:['김민수'],memo:'',source:'TEXT',language:'ko',template:'일반',diarization:false,segments:[],minutes,items:[],assets:[]}};
   await page.route('**/api/**',route=>{
     const path=new URL(route.request().url()).pathname;
+    if(path==='/api/minutes-templates')return route.fulfill({json:route.request().method()==='POST'?{...route.request().postDataJSON(),id:'company',createdAt:new Date().toISOString()}:[]});
     if(path==='/api/meetings/document/minutes/template'){
       meeting.content.template=route.request().postDataJSON().template;
       minutes.formatted='# 회사 양식\n'+minutes.summary;minutes.version++;return route.fulfill({json:meeting});
@@ -28,9 +29,10 @@ for(const custom of [false,true])test(`reads ${custom?'uploaded':'basic'} minute
   await editor.fill('수정한 회의록 본문');
   await page.getByRole('button',{name:'회의록 저장',exact:true}).click();
   await expect(page.getByRole('article',{name:'회의록 문서'})).toContainText('수정한 회의록 본문');
-  await page.getByRole('button',{name:'회의록 양식 업로드',exact:true}).click();
-  await page.getByLabel('회의록 양식 업로드 (TXT·MD, UTF-8, 100KB 이하)').setInputFiles({name:'회사.md',mimeType:'text/markdown',buffer:Buffer.from('# 회사 양식\n{{요약}}')});
-  await page.getByRole('button',{name:'선택한 양식으로 회의록 작성',exact:true}).click();
+  await page.getByRole('button',{name:'회의록 양식 지정',exact:true}).click();
+  await page.getByLabel('양식 파일 업로드').setInputFiles({name:'회사.md',mimeType:'text/markdown',buffer:Buffer.from('# 회사 양식\n{{요약}}')});
+  await expect(page.getByLabel('회의록 양식 목록').getByRole('button',{name:'회사.md'})).toBeVisible();
+  await page.getByRole('button',{name:'선택한 양식 적용',exact:true}).click();
   await expect(page.getByRole('article',{name:'회의록 문서'})).toContainText('회사 양식');
   await page.reload();await expect(page.getByRole('article',{name:'회의록 문서'})).toContainText('회사 양식');
   const download=page.waitForEvent('download');await page.getByRole('button',{name:'회의록 다운로드',exact:true}).click();expect((await download).suggestedFilename()).toBe('회의록.md');
