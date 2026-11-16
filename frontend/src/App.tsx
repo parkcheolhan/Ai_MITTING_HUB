@@ -630,10 +630,13 @@ function MeetingDetail() {
   const playingAsset = useRef<string|null>(null);
   const clip=useRef<{assetId:string;endMs:number;offset:number}|null>(null);
   const clipTimer=useRef<number|null>(null);
+  const stoppedClip=useRef<{assetId:string;time:number}|null>(null);
   function clearClipTimer(){if(clipTimer.current!==null){window.clearTimeout(clipTimer.current);clipTimer.current=null;}}
-  useEffect(()=>()=>{clearClipTimer();clip.current=null;},[id,location.pathname,location.search]);
+  useEffect(()=>()=>{clearClipTimer();clip.current=null;stoppedClip.current=null;},[id,location.pathname,location.search]);
+  function atStoppedClip(assetId:string,player:HTMLVideoElement){return stoppedClip.current?.assetId===assetId&&player.paused&&Math.abs(player.currentTime-stoppedClip.current.time)<.02;}
   function stopClip(player:HTMLVideoElement){
     const current=clip.current;if(!current)return;
+    stoppedClip.current={assetId:current.assetId,time:(current.endMs-current.offset)/1000};
     clip.current=null;clearClipTimer();player.pause();
     player.currentTime=(current.endMs-current.offset)/1000;
     playingAsset.current=null;setPlaybackMs(-1);
@@ -715,7 +718,7 @@ function MeetingDetail() {
     const source=[...sources].reverse().find(s=>s.offset!==null&&s.offset<=ms);
     const player=source&&media.current[source.asset.id];
     if(player&&source){
-      clearClipTimer();const segment=m!.content.segments.find(s=>s.startMs===ms)||m!.content.segments.find(s=>s.startMs<=ms&&s.endMs>ms);
+      clearClipTimer();stoppedClip.current=null;const segment=m!.content.segments.find(s=>s.startMs===ms)||m!.content.segments.find(s=>s.startMs<=ms&&s.endMs>ms);
       const stop=endMs??segment?.endMs;const boundary=sources.find(s=>s.offset!==null&&s.offset>source.offset!)?.offset;
       clip.current=stop!==undefined&&stop>ms?{assetId:source.asset.id,endMs:Math.min(stop,boundary??Infinity),offset:source.offset!}:null;
       playingAsset.current=source.asset.id;Object.values(media.current).forEach(p=>{if(p!==player)p?.pause();});
@@ -800,9 +803,9 @@ function MeetingDetail() {
               <p>{a.originalName}</p>
               <AuthenticatedVideo
                 ref={node=>{media.current[a.id]=node;}}
-                onPlay={e=>{if(clip.current&&clip.current.assetId!==a.id){clearClipTimer();clip.current=null;}playingAsset.current=a.id;Object.values(media.current).forEach(p=>{if(p!==e.currentTarget)p?.pause();});if(!enforceClip(a.id,e.currentTarget)){setPlaybackMs(offset===null?-1:offset+e.currentTarget.currentTime*1000);scheduleClip(a.id,e.currentTarget);}}}
-                onSeeking={e=>{playingAsset.current=a.id;if(!enforceClip(a.id,e.currentTarget)){setPlaybackMs(offset===null?-1:offset+e.currentTarget.currentTime*1000);scheduleClip(a.id,e.currentTarget);}}}
-                onTimeUpdate={e=>{if((!playingAsset.current||playingAsset.current===a.id)&&!enforceClip(a.id,e.currentTarget))setPlaybackMs(offset===null?-1:offset+e.currentTarget.currentTime*1000);}}
+                onPlay={e=>{stoppedClip.current=null;if(clip.current&&clip.current.assetId!==a.id){clearClipTimer();clip.current=null;}playingAsset.current=a.id;Object.values(media.current).forEach(p=>{if(p!==e.currentTarget)p?.pause();});if(!enforceClip(a.id,e.currentTarget)){setPlaybackMs(offset===null?-1:offset+e.currentTarget.currentTime*1000);scheduleClip(a.id,e.currentTarget);}}}
+                onSeeking={e=>{if(atStoppedClip(a.id,e.currentTarget))return;playingAsset.current=a.id;if(!enforceClip(a.id,e.currentTarget)){setPlaybackMs(offset===null?-1:offset+e.currentTarget.currentTime*1000);scheduleClip(a.id,e.currentTarget);}}}
+                onTimeUpdate={e=>{if(!atStoppedClip(a.id,e.currentTarget)&&(!playingAsset.current||playingAsset.current===a.id)&&!enforceClip(a.id,e.currentTarget))setPlaybackMs(offset===null?-1:offset+e.currentTarget.currentTime*1000);}}
                 onPlaying={e=>scheduleClip(a.id,e.currentTarget)}
                 onPause={()=>{if(clip.current?.assetId===a.id)clearClipTimer();}}
                 onWaiting={()=>{if(clip.current?.assetId===a.id)clearClipTimer();}}

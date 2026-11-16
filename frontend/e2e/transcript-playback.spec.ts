@@ -17,6 +17,7 @@ test('clicked utterances and speaker groups stop at their own boundaries',async(
   await page.getByRole('button',{name:'00:00:00 발언 재생',exact:true}).click();
   await tick(1.9);expect(await video.evaluate(v=>v.paused)).toBe(false);
   await tick(2.2);expect(await video.evaluate(v=>v.paused)).toBe(true);expect(await video.evaluate(v=>v.currentTime)).toBe(2);
+  await tick(2);await expect(page.locator('.transcript-utterance[data-active="true"]')).toHaveCount(0);
   await page.getByRole('button',{name:'화자 1 00:00:00 재생',exact:true}).click();
   await tick(3);expect(await video.evaluate(v=>v.paused)).toBe(false);
   await tick(4.1);expect(await video.evaluate(v=>v.paused)).toBe(true);expect(await video.evaluate(v=>v.currentTime)).toBe(4);
