@@ -75,6 +75,8 @@ public class AiJobProcessor {
                 case "REVIEWING_TRANSCRIPT"->{
                     MeetingService.require(c.segments.equals(input.content().segments),"교정 중 음성 기록이 변경되어 적용을 중단했습니다.");
                     MeetingService.applyTranscriptText(c,(List<Segment>)computed);
+                    c.transcriptReviewRevision=c.transcriptRevision;c.transcriptReviewMode=ai.mode();
+                    c.transcriptReviewedSegments=ai.mode().equals("mock")?0:c.segments.size();
                 }
                 case "TRANSCRIBING"->{c.segments=(List<Segment>)computed;c.segments.forEach(segment->c.speakerGroups.putIfAbsent(segment.id(),segment.speaker()));c.diarization=c.segments.stream().anyMatch(segment->segment.speaker().matches(".*화자 [0-9]+"));}
                 case "IDENTIFYING_SPEAKERS"->{c.segments=(List<Segment>)computed;c.diarization=true;c.speakerGroups.clear();c.segments.forEach(segment->c.speakerGroups.put(segment.id(),segment.speaker()));service.syncEvidenceSpeakers(c);}

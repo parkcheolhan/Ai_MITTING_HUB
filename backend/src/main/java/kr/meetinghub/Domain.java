@@ -42,6 +42,8 @@ public final class Domain {
     public static class Content {
         public Map<String,String> originalTranscriptText = new LinkedHashMap<>();
         public int transcriptRevision;
+        public int transcriptReviewRevision=-1,transcriptReviewedSegments;
+        public String transcriptReviewMode="";
         public String occurredAt = "", projectKey = "DEMO", memo = "", source = "TEXT", language = "ko", template = "일반";
         public boolean diarization;
         public List<String> participants = new ArrayList<>();

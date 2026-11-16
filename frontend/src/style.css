@@ -2321,6 +2321,7 @@ main:has(.ticket-review) > footer { display: none; }
 .transcript-text-editor { display: block; margin-top: 12px; color: #667a6d; font-size: 12px; }
 .transcript-text-editor textarea { display: block; margin-top: 6px; line-height: 1.9; font-size: 14px; color: var(--text-primary); }
 .transcript-original { margin-top: 14px; font-size: 13px; color: #657369; }
+.transcript-review-coverage { margin: 0; padding: 0 24px 14px; font-size: 13px; color: #24573c; }
 .jira-connection-guide { margin: 18px 0 24px; border: 1px solid #dbe5df; border-radius: 10px; background: #f7faf8; overflow: hidden; }
 .jira-connection-guide details { padding: 16px 18px; }
 .jira-connection-guide details + details { border-top: 1px solid #dbe5df; }

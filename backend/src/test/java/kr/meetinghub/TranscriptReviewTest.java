@@ -17,22 +17,29 @@ class TranscriptReviewTest {
         var ai=new OpenAiIntelligence(config,json,(key,body)->{
             var request=json.readTree(body);assertThat(request.path("instructions").asText()).contains("어말어미","이름·회사","추측으로 완성하지","일괄 치환하지");
             assertThat(request.path("text").path("format").path("name").asText()).isEqualTo("transcript_review");
-            return OpenAiIntelligenceTest.reply(json,Map.of("edits",List.of(edit(original.id(),original.text(),corrected))));
+            return OpenAiIntelligenceTest.reply(json,Map.of("segments",List.of(edit(original.id(),original.text(),corrected))));
         });
         assertThat(ai.reviewTranscript("자막 초안 검토",List.of(original))).containsExactly(new Segment(original.id(),original.speaker(),1000,7000,corrected,false));
     }
     @Test void rejectsFabricatedIdsStaleOriginalsRepeatedEditsAndChangedNumbers(){
         var numbered=new Segment("s","김민수",0,1000,"3개를 확인했으면 좋겠습니다.",false);
         for(var edits:List.of(List.of(edit("unknown",numbered.text(),"수정")),List.of(edit("s","다른 원문","수정")),List.of(edit("s",numbered.text(),"4개를 확인했으면 좋겠습니다.")),List.of(edit("s",numbered.text(),numbered.text()),edit("s",numbered.text(),numbered.text())))){
-            var ai=new OpenAiIntelligence(config,json,(key,body)->OpenAiIntelligenceTest.reply(json,Map.of("edits",edits)));
+            var ai=new OpenAiIntelligence(config,json,(key,body)->OpenAiIntelligenceTest.reply(json,Map.of("segments",edits)));
             assertThatThrownBy(()->ai.reviewTranscript("검토",List.of(numbered))).isInstanceOf(IllegalArgumentException.class);
         }
     }
     @Test void batchesLongTranscriptsAndStopsCallingAfterCancellation(){
         var source=java.util.stream.IntStream.range(0,61).mapToObj(i->new Segment("s"+i,"화자 1",i*1000,(i+1)*1000,"검토할 발언",false)).toList();
         var calls=new AtomicInteger();
-        var ai=new OpenAiIntelligence(config,json,(key,body)->{calls.incrementAndGet();return OpenAiIntelligenceTest.reply(json,Map.of("edits",List.of()));});
+        var ai=new OpenAiIntelligence(config,json,(key,body)->{calls.incrementAndGet();var input=json.readTree(json.readTree(body).path("input").asText());var reviewed=new ArrayList<Map<String,Object>>();for(var segment:input.path("segments"))reviewed.add(Map.of("segmentId",segment.path("id").asText(),"originalText",segment.path("text").asText(),"text",segment.path("text").asText(),"reason",""));return OpenAiIntelligenceTest.reply(json,Map.of("segments",reviewed));});
         assertThat(ai.reviewTranscript("긴 회의",source)).isEqualTo(source);assertThat(calls.get()).isEqualTo(3);
         calls.set(0);assertThatThrownBy(()->ai.reviewTranscript("긴 회의",source,()->calls.get()>0)).hasMessageContaining("취소");assertThat(calls.get()).isEqualTo(1);
+    }
+    @Test void refusesPartialReviewAndChangedOrderingEvenWhenOmittedTextNeedsNoChanges(){
+        var second=new Segment("s2","화자 2",7000,9000,"네, 확인하겠습니다.",false);
+        for(var result:List.of(List.of(edit(original.id(),original.text(),original.text())),List.of(edit(second.id(),second.text(),second.text()),edit(original.id(),original.text(),original.text())))){
+            var ai=new OpenAiIntelligence(config,json,(key,body)->OpenAiIntelligenceTest.reply(json,Map.of("segments",result)));
+            assertThatThrownBy(()->ai.reviewTranscript("전체 대화",List.of(original,second))).isInstanceOf(IllegalArgumentException.class);
+        }
     }
 }

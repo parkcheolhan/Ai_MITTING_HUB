@@ -7,7 +7,7 @@ test('edits transcript, groups only consecutive speakers and retains source timi
     {id:'c',speaker:'이지은',startMs:5000,endMs:7000,text:'확인하겠습니다.',estimatedTime:false},
     {id:'d',speaker:'김민수',startMs:7000,endMs:10000,text:'일정은 유지합니다.',estimatedTime:false},
   ];
-  const meeting={id:'editing',title:'음성 기록 편집 테스트',status:'REVIEW_PENDING',createdAt:new Date().toISOString(),drafts:[],jobs:[],epics:[],content:{occurredAt:'',projectKey:'TEST',participants:['김민수','이지은'],source:'MEDIA',language:'ko',template:'일반',diarization:true,segments,minutes:null,items:[],assets:[],originalTranscriptText:{} as Record<string,string>,transcriptRevision:0}};
+  const meeting={id:'editing',title:'음성 기록 편집 테스트',status:'REVIEW_PENDING',createdAt:new Date().toISOString(),drafts:[],jobs:[],epics:[],content:{occurredAt:'',projectKey:'TEST',participants:['김민수','이지은'],source:'MEDIA',language:'ko',template:'일반',diarization:true,segments,minutes:null,items:[],assets:[],originalTranscriptText:{} as Record<string,string>,transcriptRevision:0,transcriptReviewRevision:0,transcriptReviewedSegments:4,transcriptReviewMode:'codex'}};
   let received:unknown;
   await page.route('**/api/**',async route=>{
     const r=route.request(),path=new URL(r.url()).pathname;
@@ -21,6 +21,7 @@ test('edits transcript, groups only consecutive speakers and retains source timi
   });
   await page.goto('/meetings/editing?tab=transcript');
   await expect(page.locator('.transcript-utterance')).toHaveCount(3);
+  await expect(page.locator('.transcript-review-coverage')).toContainText('전체 4 / 4구간 검토');
   await expect(page.locator('.transcript-utterance').first()).toContainText('자막도 확인해 주세요.');
   await page.getByRole('button',{name:'음성 기록 편집',exact:true}).click();
   const input=page.getByLabel('00:00:00 발언 내용',{exact:true});
@@ -30,6 +31,7 @@ test('edits transcript, groups only consecutive speakers and retains source timi
   await expect(page.locator('.transcript-utterance')).toHaveCount(2);
   await page.getByRole('button',{name:'음성 기록 저장',exact:true}).click();
   await expect(page.getByRole('status').filter({hasText:'음성 기록을 저장했습니다.'})).toBeVisible();
+  await expect(page.locator('.transcript-review-coverage')).not.toContainText('검토 완료');
   expect(received).toEqual({edits:[{id:'a',originalText:'주간복 때 초연을 검토합니다.',text:'주간보고 때 초안을 검토합니다.'}]});
   await page.reload();
   await expect(page.locator('.transcript-utterance')).toHaveCount(3);

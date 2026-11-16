@@ -18,4 +18,12 @@ class TranscriptReviewLiveTest {
         assertThat(result.get(1).id()).isEqualTo("example");assertThat(result.get(1).startMs()).isEqualTo(2000);
         System.out.println("Synthetic transcript correction: "+result.get(1).text());
     }
+    @Test void reviewsEveryConversationalTurnAndKeepsQuestionAndReplyTone(){
+        var source=List.of(new Segment("first","화자 1",0,2000,"소리가 들리는다",false),new Segment("reply","화자 2",2000,4000,"네 잘 들려요",false),new Segment("next","화자 1",4000,6000,"그럼 화면 공유할게요",false));
+        var ai=new CodexIntelligence(new AiConfig("codex","codex-default",""),new ObjectMapper());
+        var result=ai.reviewTranscript("온라인 회의 시작 · 소리 연결 확인",source);
+        assertThat(result).hasSize(source.size());assertThat(result.get(0).text()).contains("들리는데?");
+        assertThat(result.get(1).text()).contains("들려요").doesNotContain("들린다");
+        System.out.println("Synthetic dialogue correction: "+result.get(0).text()+" / "+result.get(1).text());
+    }
 }

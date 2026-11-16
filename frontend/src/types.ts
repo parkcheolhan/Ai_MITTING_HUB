@@ -103,6 +103,9 @@ export type Meeting = {
     segments: Segment[];
     originalTranscriptText?: Record<string,string>;
     transcriptRevision?: number;
+    transcriptReviewRevision?:number;
+    transcriptReviewedSegments?:number;
+    transcriptReviewMode?:string;
     speakerGroups?: Record<string,string>;
     minutes: Minutes | null;
     items: Item[];
