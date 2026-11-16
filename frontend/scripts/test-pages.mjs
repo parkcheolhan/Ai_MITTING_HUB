@@ -36,6 +36,20 @@ try{
   await page.getByRole('button',{name:'서버 연결',exact:true}).click();
   await page.getByRole('button',{name:'서버 변경 / 연결 해제'}).waitFor({timeout:20000});
   await page.locator('h1').waitFor();
+  const layout=await page.evaluate(()=>({
+    app:getComputedStyle(document.querySelector('.app')).display,
+    sidebar:getComputedStyle(document.querySelector('.sidebar')).backgroundColor,
+    rules:Array.from(document.styleSheets).reduce((n,s)=>n+s.cssRules.length,0),
+  }));
+  assert.equal(layout.app,'flex','Dashboard stylesheet must be applied');
+  assert.equal(layout.sidebar,'rgb(24, 53, 43)','Sidebar theme must be applied');
+  assert(layout.rules>200,'Bundled stylesheet must contain the complete rules');
+  if(process.env.E2E_SCREENSHOT_DIR)await page.screenshot({path:process.env.E2E_SCREENSHOT_DIR+'/pages-desktop.png',fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  const mobile=await page.evaluate(()=>({width:innerWidth,content:document.documentElement.scrollWidth}));
+  assert(mobile.content<=mobile.width+1,'Mobile dashboard must fit the viewport');
+  if(process.env.E2E_SCREENSHOT_DIR)await page.screenshot({path:process.env.E2E_SCREENSHOT_DIR+'/pages-mobile.png',fullPage:true});
+  await page.setViewportSize({width:1280,height:720});
   await page.goto(config.pagesUrl+'#/settings');
   await page.getByRole('heading',{name:'우리 팀에 맞는 연결',exact:true}).waitFor();
   const result=await page.evaluate(async({apiUrl,token})=>{
