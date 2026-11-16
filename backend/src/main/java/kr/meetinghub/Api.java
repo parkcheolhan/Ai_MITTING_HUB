@@ -52,6 +52,7 @@ public class Api {
         return ResponseEntity.ok().contentType(MediaType.parseMediaType(asset.mediaType())).contentLength(resource.contentLength()).body(resource);
     }
     @PostMapping("/meetings/{id}/process") public Job process(@PathVariable String id) { return worker.start(id,"PIPELINE"); }
+    @PutMapping("/meetings/{id}/analysis-flow") public MeetingView flow(@PathVariable String id,@Valid @RequestBody AnalysisFlowInput input){return worker.setAdvanceMode(id,input.mode());}
     @PostMapping("/meetings/{id}/ticket-drafts/structure") public List<Draft> structure(@PathVariable String id){return service.structureCandidates(id);}
     @PostMapping("/meetings/{id}/ticket-drafts/format") public List<Draft> formatDescriptions(@PathVariable String id,@Valid @RequestBody Ids input){return service.formatDescriptions(id,input);}
     @PostMapping("/meetings/{id}/ticket-drafts/titles") public List<Draft> formatTitles(@PathVariable String id,@Valid @RequestBody Ids input){return service.formatSubtaskTitles(id,input);}
@@ -94,6 +95,7 @@ public class Api {
     @GetMapping("/meetings/{id}/jira-results") public List<Draft> results(@PathVariable String id) { return service.get(id).drafts(); }
     @GetMapping("/jobs/{id}") public Job job(@PathVariable String id) { return service.jobs().findById(id).orElseThrow(MeetingService::missing); }
     @PostMapping("/jobs/{id}/cancel") public Job cancel(@PathVariable String id) { return worker.cancel(id); }
+    @PostMapping("/jobs/{id}/continue") public Job continueJob(@PathVariable String id,@Valid @RequestBody ContinueStageInput input){return worker.continueJob(id,input.expectedStageIndex());}
     @PostMapping("/jobs/{id}/retry") public Job retry(@PathVariable String id) {
         var old=job(id); MeetingService.require(Set.of("FAILED","CANCELLED").contains(old.status),"실패 또는 취소된 작업만 재시도할 수 있습니다.");
         if(old.type.equals("SCHEDULE")){try{return worker.schedule(old.meetingId,service.mapper().readValue(old.requestPayload,ScheduleRequest.class));}catch(com.fasterxml.jackson.core.JsonProcessingException e){throw new IllegalArgumentException("이전 일정 설정을 읽을 수 없습니다.");}}

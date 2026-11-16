@@ -31,7 +31,8 @@ class SpeakerPathsTest(unittest.TestCase):
                 self.assertEqual(Path.cwd(), Path(working))
                 result = identify(np.zeros(48000, dtype=np.float32),
                                   [{"start": 0, "end": 3, "text": ""}], model_dir)
-                self.assertEqual(result[0]["speaker"], "화자 미지정")
+                self.assertEqual(result[0]["speaker"], "화자 1")
+                self.assertEqual(result[0]["speakerAssignment"], "ESTIMATED")
                 self.assertEqual(Path.cwd(), Path(working))
             finally:
                 os.chdir(before)

@@ -12,19 +12,22 @@ public class AiJobProcessor {
     final SchedulingService scheduling;
     AiJobProcessor(MeetingService service,Jobs jobs,TransactionTemplate tx,Adapters.SpeechToText speech,SchedulingService scheduling){this.service=service;this.jobs=jobs;this.tx=tx;this.speech=speech;this.scheduling=scheduling;}
     record Input(Meeting meeting,Content content,Draft draft,List<Item> selected,boolean hierarchyExists) {}
+    static List<String> stages(String type){
+        return switch(type){
+            case "TRANSCRIBE"->List.of("TRANSCRIBING","REVIEWING_TRANSCRIPT");case "MINUTES"->List.of("GENERATING_MINUTES");
+            case "TRANSCRIPT_REVIEW"->List.of("REVIEWING_TRANSCRIPT");case "SPEAKERS"->List.of("IDENTIFYING_SPEAKERS");
+            case "ANALYZE"->List.of("ANALYZING","GENERATING_TICKETS");case "TICKETS","REVIEW"->List.of("GENERATING_TICKETS");
+            default->List.of("TRANSCRIBING","REVIEWING_TRANSCRIPT","GENERATING_MINUTES","ANALYZING","GENERATING_TICKETS");
+        };
+    }
     public void run(String id){
         try {
             var initial=jobs.findById(id).orElseThrow();
+            if(!initial.status.equals("QUEUED"))return;
             if(initial.type.equals("SCHEDULE")){scheduling.run(id);return;}
             var ai=initial.type.equals("SPEAKERS")?new Adapters.MockIntelligence():service.intelligence().snapshot();
-            var stages=switch(initial.type){
-                case "TRANSCRIBE"->List.of("TRANSCRIBING","REVIEWING_TRANSCRIPT");case "MINUTES"->List.of("GENERATING_MINUTES");
-                case "TRANSCRIPT_REVIEW"->List.of("REVIEWING_TRANSCRIPT");
-                case "SPEAKERS"->List.of("IDENTIFYING_SPEAKERS");
-                case "ANALYZE"->List.of("ANALYZING","GENERATING_TICKETS");case "TICKETS","REVIEW"->List.of("GENERATING_TICKETS");
-                default->List.of("TRANSCRIBING","REVIEWING_TRANSCRIPT","GENERATING_MINUTES","ANALYZING","GENERATING_TICKETS");
-            };
-            for(int index=0;index<stages.size();index++){
+            var stages=stages(initial.type);
+            for(int index=initial.nextStageIndex;index<stages.size();index++){
                 String stage=stages.get(index);int progress=10+index*80/stages.size();
                 var input=tx.execute(s->{
                     var j=jobs.locked(id).orElseThrow();if(j.status.equals("CANCELLED"))return null;
@@ -56,7 +59,7 @@ public class AiJobProcessor {
                         input.draft()==null?"":(input.hierarchyExists()?"기존 계층이 있습니다. 이번에는 이 티켓만 정리하고 subtasks는 반드시 빈 목록으로 반환하세요.\n":"")+"기존 초안 제목: "+input.draft().summary+"\n기존 설명:\n"+input.draft().description);
                     default->throw new IllegalArgumentException("알 수 없는 분석 단계입니다.");
                 };
-                persist(id,stage,input,computed,ai);
+                if(persist(id,stage,input,computed,ai,index+1,stages.size()))return;
             }
             tx.executeWithoutResult(s->{
                 var j=jobs.locked(id).orElseThrow();if(j.status.equals("CANCELLED"))return;
@@ -66,9 +69,9 @@ public class AiJobProcessor {
         }catch(Exception e){fail(id,e instanceof IllegalArgumentException?e.getMessage():"AI 처리에 실패했습니다. 결과를 덮어쓰지 않았습니다. 입력 및 설정을 확인하세요.");}
     }
     @SuppressWarnings("unchecked")
-    void persist(String id,String stage,Input input,Object computed,Adapters.Intelligence ai){
-        tx.executeWithoutResult(s->{
-            var j=jobs.locked(id).orElseThrow();if(j.status.equals("CANCELLED"))return;
+    boolean persist(String id,String stage,Input input,Object computed,Adapters.Intelligence ai,int nextStage,int totalStages){
+        return Boolean.TRUE.equals(tx.execute(s->{
+            var j=jobs.locked(id).orElseThrow();if(j.status.equals("CANCELLED"))return true;
             if(input.draft()!=null)service.drafts().locked(input.draft().id).orElseThrow(MeetingService::missing);
             var m=service.lock(j.meetingId);var c=service.content(m);
             switch(stage){
@@ -101,8 +104,12 @@ public class AiJobProcessor {
                 case "GENERATING_TICKETS"->service.applyDraftProposals(m,c,(List<TicketProposal>)computed,ai.mode(),ai.model(),input.draft()==null?null:input.draft().id,input.draft()==null?-1:input.draft().version);
                 default->throw new IllegalArgumentException("알 수 없는 분석 단계입니다.");
             }
-            service.save(m,c);service.audits().save(new Audit(!ai.mode().equals("mock")?"AI_"+stage:"MOCK_"+stage,m.id));
-        });
+            j.nextStageIndex=nextStage;j.pausedTranscriptRevision=c.transcriptRevision;
+            boolean waiting="CONFIRM".equals(j.advanceMode)&&nextStage<totalStages;
+            if(waiting){j.status="WAITING_CONFIRMATION";m.status="WAITING_CONFIRMATION";service.audits().save(new Audit("JOB_STAGE_WAITING",id));}
+            jobs.save(j);service.save(m,c);service.audits().save(new Audit(!ai.mode().equals("mock")?"AI_"+stage:"MOCK_"+stage,m.id));
+            return waiting;
+        }));
     }
     void fail(String id,String message){
         tx.executeWithoutResult(s->{

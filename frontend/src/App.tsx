@@ -1,5 +1,6 @@
 import NewMeeting from "./MeetingForm";
 import AuthenticatedVideo from './AuthenticatedVideo';
+import AnalysisFlowControls from './AnalysisFlowControls';
 import {standalone} from './standalone';
 import StandaloneNotice from './StandaloneNotice';
 import SetupTutorial, {tutorialNeeded} from "./SetupTutorial";
@@ -727,6 +728,7 @@ function MeetingDetail() {
           </button>
         ))}
       </div>
+      {!standalone&&<AnalysisFlowControls meeting={m} reload={reload}/>}
       {job ? (
         <div className="job-banner">
           <ProcessingStatus meeting={m}/>

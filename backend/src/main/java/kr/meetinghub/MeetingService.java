@@ -69,7 +69,7 @@ public class MeetingService {
         var timings=new HashMap<String,Long>();var segments=new ArrayList<Segment>();
         for(int i=0;i<c.segments.size();i++){
             var s=c.segments.get(i);long start=input.startMs()+input.intervalMs()*i;
-            timings.put(s.id(),start);segments.add(new Segment(s.id(),s.speaker(),start,start+input.intervalMs(),s.text(),true));
+            timings.put(s.id(),start);segments.add(new Segment(s.id(),s.speaker(),start,start+input.intervalMs(),s.text(),true,s.speakerAssignment(),s.speakerSimilarity()));
         }
         c.segments=segments;c.items=retimeItems(c.items,timings);c.archivedItems=retimeItems(c.archivedItems,timings);
         save(m,c);audits.save(new Audit("TRANSCRIPT_TIMING_UPDATED",id));return view(m);
@@ -85,7 +85,7 @@ public class MeetingService {
             require(Objects.equals(segment.text(),edit.originalText()),"다른 작업에서 음성 기록이 변경되었습니다. 편집을 취소하고 최신 기록을 다시 불러오세요.");
             require(edit.text()!=null&&!edit.text().isBlank()&&texts.putIfAbsent(edit.id(),edit.text().strip())==null,"발언은 비워 두거나 중복 지정할 수 없습니다.");
         }
-        var next=c.segments.stream().map(s->new Segment(s.id(),s.speaker(),s.startMs(),s.endMs(),texts.getOrDefault(s.id(),s.text()),s.estimatedTime())).toList();
+        var next=c.segments.stream().map(s->new Segment(s.id(),s.speaker(),s.startMs(),s.endMs(),texts.getOrDefault(s.id(),s.text()),s.estimatedTime(),s.speakerAssignment(),s.speakerSimilarity())).toList();
         applyTranscriptText(c,next);save(m,c);audits.save(new Audit("TRANSCRIPT_TEXT_EDITED",id));return view(m);
     }
     static void applyTranscriptText(Content c,List<Segment> next){
@@ -107,7 +107,7 @@ public class MeetingService {
         var valid=c.segments.stream().map(Segment::id).toList();require(valid.containsAll(input.segmentSpeakers().keySet()),"다른 회의의 발언에는 참석자를 지정할 수 없습니다.");
         require(input.segmentSpeakers().values().stream().allMatch(n->n!=null&&(n.isBlank()||names.contains(n))),"발언에 지정한 참석자를 먼저 추가하세요.");
         c.segments.forEach(s->c.speakerGroups.putIfAbsent(s.id(),s.speaker()));
-        c.segments=c.segments.stream().map(s->{String name=input.segmentSpeakers().get(s.id());return name==null?s:new Segment(s.id(),name.isBlank()?c.speakerGroups.get(s.id()):name,s.startMs(),s.endMs(),s.text(),s.estimatedTime());}).toList();
+        c.segments=c.segments.stream().map(s->{String name=input.segmentSpeakers().get(s.id());return name==null?s:new Segment(s.id(),name.isBlank()?c.speakerGroups.get(s.id()):name,s.startMs(),s.endMs(),s.text(),s.estimatedTime(),s.speakerAssignment(),s.speakerSimilarity());}).toList();
         c.participants=names;syncEvidenceSpeakers(c);
         if(refreshDocument){c.minutes.formatted=MinutesTemplate.render(m.title,c,c.minutes);c.minutes.version++;}
         save(m,c);audits.save(new Audit("PARTICIPANTS_ASSIGNED",id));return view(m);

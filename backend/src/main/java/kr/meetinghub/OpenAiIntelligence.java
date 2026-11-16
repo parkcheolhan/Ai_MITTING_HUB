@@ -77,7 +77,7 @@ public class OpenAiIntelligence implements Adapters.Intelligence {
             begin=end;
         }
         MeetingService.require(!cancelled.getAsBoolean(),"음성 기록 교정을 취소했습니다.");
-        return segments.stream().map(s->new Segment(s.id(),s.speaker(),s.startMs(),s.endMs(),replacements.getOrDefault(s.id(),s.text()),s.estimatedTime())).toList();
+        return segments.stream().map(s->new Segment(s.id(),s.speaker(),s.startMs(),s.endMs(),replacements.getOrDefault(s.id(),s.text()),s.estimatedTime(),s.speakerAssignment(),s.speakerSimilarity())).toList();
     }
     static List<String> numbers(String text){return java.util.regex.Pattern.compile("\\p{N}+(?:[.,:/-]\\p{N}+)*").matcher(text).results().map(java.util.regex.MatchResult::group).toList();}
     JsonNode call(String operation,String instructions,Object input,Map<String,Object> schema,int maxOutput){

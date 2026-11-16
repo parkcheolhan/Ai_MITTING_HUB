@@ -36,7 +36,9 @@ public class LocalSpeech implements Adapters.SpeechToText {
         Path path=uploadDir.resolve(asset.storageKey()).normalize();MeetingService.require(path.startsWith(uploadDir)&&Files.isRegularFile(path,LinkOption.NOFOLLOW_LINKS),"녹음 원본을 찾을 수 없습니다.");
         var rows=content.segments.stream().map(s->Map.of("start",s.startMs()/1000.0,"end",s.endMs()/1000.0,"text",s.text())).toList();
         var parsed=parse(run(path,content.language,cancelled,rows),0);MeetingService.require(parsed.size()==content.segments.size(),"화자 분석 결과의 발언 수가 일치하지 않습니다.");
-        var result=new ArrayList<Segment>();for(int i=0;i<parsed.size();i++){var old=content.segments.get(i);result.add(new Segment(old.id(),parsed.get(i).speaker(),old.startMs(),old.endMs(),old.text(),old.estimatedTime()));}return result;
+        var assignedNames=new HashMap<String,Set<String>>();
+        for(int i=0;i<parsed.size();i++)if(content.participants.contains(content.segments.get(i).speaker()))assignedNames.computeIfAbsent(parsed.get(i).speaker(),k->new HashSet<>()).add(content.segments.get(i).speaker());
+        var result=new ArrayList<Segment>();for(int i=0;i<parsed.size();i++){var old=content.segments.get(i);var matched=parsed.get(i);var names=assignedNames.getOrDefault(matched.speaker(),Set.of());String name=content.participants.contains(old.speaker())?old.speaker():names.size()==1?names.iterator().next():matched.speaker();result.add(new Segment(old.id(),name,old.startMs(),old.endMs(),old.text(),old.estimatedTime(),matched.speakerAssignment(),matched.speakerSimilarity()));}return result;
     }
     @Override public List<Segment> transcribe(Content content,BooleanSupplier cancelled){
         if(!content.segments.isEmpty())return content.segments;
@@ -46,7 +48,7 @@ public class LocalSpeech implements Adapters.SpeechToText {
             MeetingService.require(asset.storageKey()!=null&&asset.storageKey().matches("[a-zA-Z0-9-]+\\.(mp3|wav|m4a|aac|acc|mp4|webm)"),"녹음 파일 경로가 잘못되었습니다.");
             Path path=uploadDir.resolve(asset.storageKey()).normalize();MeetingService.require(path.startsWith(uploadDir)&&Files.isRegularFile(path,LinkOption.NOFOLLOW_LINKS),"저장된 녹음·녹화 파일을 찾을 수 없습니다.");
             var parsed=parse(runner.transcribe(path,Objects.toString(content.language,"ko"),cancelled),offset);
-            assetNumber++;if(content.assets.size()>1){String prefix="원본 "+assetNumber+" · ";parsed=parsed.stream().map(s->new Segment(s.id(),prefix+s.speaker(),s.startMs(),s.endMs(),s.text(),s.estimatedTime())).toList();}
+            assetNumber++;if(content.assets.size()>1){String prefix="원본 "+assetNumber+" · ";parsed=parsed.stream().map(s->new Segment(s.id(),prefix+s.speaker(),s.startMs(),s.endMs(),s.text(),s.estimatedTime(),s.speakerAssignment(),s.speakerSimilarity())).toList();}
             results.addAll(parsed);offset=parsed.get(parsed.size()-1).endMs();
             MeetingService.require(results.size()<=3000,"녹음이 너무 깁니다. 회의를 나누어 등록하세요.");
         }
@@ -64,7 +66,9 @@ public class LocalSpeech implements Adapters.SpeechToText {
             long startMs=offset+Math.round(start*1000),endMs=offset+Math.round(end*1000);
             MeetingService.require(startMs>=previous,"음성 전사 구간 순서가 잘못되었습니다.");size+=text.length();MeetingService.require(size<=200000,"전사문이 너무 깁니다. 녹음을 나누어 등록하세요.");
             String speaker=row.path("speaker").asText("화자 미분리");MeetingService.require(speaker.matches("화자 (?:[1-9][0-9]{0,2}|미지정|미분리)"),"화자 분석 결과를 확인하세요.");
-            segments.add(new Segment(UUID.randomUUID().toString(),speaker,startMs,endMs,text,false));previous=startMs;
+            String assignment=row.hasNonNull("speakerAssignment")?row.path("speakerAssignment").asText():null;
+            Double similarity=row.path("speakerSimilarity").isNumber()?row.path("speakerSimilarity").asDouble():null;
+            segments.add(new Segment(UUID.randomUUID().toString(),speaker,startMs,endMs,text,false,assignment,similarity));previous=startMs;
         }
         return segments;
     }

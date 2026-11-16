@@ -12,10 +12,14 @@ public final class Domain {
         String memo, @Size(max=200000) String transcript, String source, String language,
         boolean diarization, @Size(max=20000) String template) {}
     public record Segment(String id, String speaker, long startMs, long endMs, String text,
-                          boolean estimatedTime) {}
+                          boolean estimatedTime,String speakerAssignment,Double speakerSimilarity) {
+        public Segment(String id,String speaker,long startMs,long endMs,String text,boolean estimatedTime){this(id,speaker,startMs,endMs,text,estimatedTime,null,null);}
+    }
     public record TranscriptTiming(@Min(0) @Max(86400000) long startMs, @Min(1000) @Max(14400000) long intervalMs) {}
     public record TranscriptTextEdit(@NotBlank String id,@NotNull String originalText,@NotBlank @Size(max=200000) String text) {}
     public record TranscriptTextInput(@NotEmpty @Size(max=3000) List<@Valid TranscriptTextEdit> edits) {}
+    public record AnalysisFlowInput(@NotBlank @Pattern(regexp="AUTO|CONFIRM") String mode) {}
+    public record ContinueStageInput(@Min(1) @Max(10) int expectedStageIndex) {}
     public record MinutesTemplateInput(@NotBlank @Size(max=20000) String template) {}
     public record ParticipantsInput(@NotNull @Size(max=100) List<@NotBlank @Size(max=100) String> participants,@NotNull @Size(max=3000) Map<String,String> segmentSpeakers) {}
     public record Evidence(String segmentId, long startMs, String speaker, String quote,
@@ -40,6 +44,7 @@ public final class Domain {
         public String generationMode="mock",generationModel="rules";
     }
     public static class Content {
+        public String analysisAdvanceMode="AUTO";
         public Map<String,String> originalTranscriptText = new LinkedHashMap<>();
         public int transcriptRevision;
         public int transcriptReviewRevision=-1,transcriptReviewedSegments;
@@ -128,6 +133,9 @@ public final class Domain {
         public String targetDraftId;
         @com.fasterxml.jackson.annotation.JsonIgnore @Column(columnDefinition="text") public String requestPayload;
         public int progress;
+        @Column(columnDefinition="integer default 0") public int nextStageIndex;
+        @Column(columnDefinition="integer default 0") public int pausedTranscriptRevision;
+        @Column(columnDefinition="varchar(16) default 'AUTO'") public String advanceMode="AUTO";
         public String errorMessage;
         public String createdAt = java.time.Instant.now().toString();
     }

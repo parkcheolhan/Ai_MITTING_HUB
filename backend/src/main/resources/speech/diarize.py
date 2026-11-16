@@ -31,6 +31,50 @@ def load_engine(model_dir):
 def identify(audio, segments, model_dir):
     engine = load_engine(model_dir)
     turns = engine.process(audio).sort_by_start_time()
+    import sherpa_onnx
+    import numpy as np
+    with chdir(Path(model_dir).resolve()):
+        extractor = sherpa_onnx.SpeakerEmbeddingExtractor(
+            sherpa_onnx.SpeakerEmbeddingExtractorConfig(model="embedding.onnx", num_threads=2))
+    cache = {}
+    def embedding(start, end):
+        key = (start, end)
+        if key in cache:
+            return cache[key]
+        begin = max(0, int(start * 16000))
+        finish = min(len(audio), int(end * 16000), begin + 128000)
+        samples = np.asarray(audio[begin:finish], dtype=np.float32)
+        value = None
+        if len(samples) >= 4000 and float(np.sqrt(np.mean(samples * samples))) > 0.0001:
+            stream = extractor.create_stream()
+            stream.accept_waveform(sample_rate=16000, waveform=samples)
+            stream.input_finished()
+            if extractor.is_ready(stream):
+                value = extractor.compute(stream)
+        cache[key] = value
+        return value
+    return assign_speakers(segments, turns, embedding)
+
+
+def unit_vector(value):
+    import numpy as np
+    if value is None:
+        return None
+    vector = np.asarray(value, dtype=np.float32)
+    length = float(np.linalg.norm(vector))
+    return vector / length if length > 0 and np.isfinite(vector).all() else None
+
+
+def assign_speakers(segments, turns, embedding):
+    """Prefer diarization evidence; fill gaps by voice similarity, never by text."""
+    import numpy as np
+    references = {}
+    for speaker in sorted({turn.speaker for turn in turns}):
+        samples = sorted((t for t in turns if t.speaker == speaker), key=lambda t: t.end-t.start, reverse=True)[:3]
+        vectors = [v for t in samples if (v := unit_vector(embedding(t.start, t.end))) is not None]
+        if vectors:
+            references[speaker] = unit_vector(np.mean(vectors, axis=0))
+    next_speaker = max([t.speaker for t in turns] + [-1]) + 1
     labels = {}
     for segment in segments:
         overlaps = {}
@@ -38,13 +82,36 @@ def identify(audio, segments, model_dir):
             length = max(0.0, min(segment["end"], turn.end) - max(segment["start"], turn.start))
             if length:
                 overlaps[turn.speaker] = overlaps.get(turn.speaker, 0.0) + length
-        if overlaps:
-            speaker = max(overlaps, key=overlaps.get)
-            if speaker not in labels:
-                labels[speaker] = f"화자 {len(labels) + 1}"
-            segment["speaker"] = labels[speaker]
+        duration = max(0, segment["end"]-segment["start"])
+        matched = max(overlaps, key=overlaps.get) if overlaps else None
+        similarity = None
+        if matched is not None and overlaps[matched] >= max(0.12, duration*0.25):
+            speaker, method = matched, "DIARIZATION"
         else:
-            segment["speaker"] = "화자 미지정"
+            vector = unit_vector(embedding(segment["start"], segment["end"]))
+            scores = sorted(((float(np.dot(vector, reference)), speaker) for speaker, reference in references.items()), reverse=True) if vector is not None else []
+            if scores:
+                similarity, speaker = scores[0]
+                margin = similarity-scores[1][0] if len(scores)>1 else 1.0
+                method = "VOICE_MATCH" if similarity >= 0.45 and margin >= 0.08 and duration >= 0.6 else "ESTIMATED"
+                if similarity < 0.15 and duration >= 1.5:
+                    speaker, method = next_speaker, "NEW_VOICE"
+                    next_speaker += 1
+                    references[speaker] = vector
+            elif vector is not None:
+                speaker, method = next_speaker, "NEW_VOICE"
+                next_speaker += 1
+                references[speaker] = vector
+            else:
+                # No reliable acoustic features: retain a numbered provisional
+                # match, explicitly marked estimated rather than claiming certainty.
+                nearest = min(turns, key=lambda t: min(abs(t.start-segment["end"]), abs(t.end-segment["start"]))) if turns else None
+                speaker, method = (nearest.speaker if nearest else 0), "ESTIMATED"
+        if speaker not in labels:
+            labels[speaker] = f"화자 {len(labels) + 1}"
+        segment["speaker"] = labels[speaker]
+        segment["speakerAssignment"] = method
+        segment["speakerSimilarity"] = None if similarity is None else round(similarity, 4)
     return segments
 
 

@@ -13,6 +13,7 @@ import MinutesTemplate from "./MinutesTemplate";
 
 export default function MeetingForm() {
   const [template, setTemplate] = useState("일반");
+  const [advanceMode,setAdvanceMode]=useState<'AUTO'|'CONFIRM'>('AUTO');
   const ai = useAiSettings();
   const speech=useSpeechStatus();
   const [params]=useSearchParams();
@@ -103,6 +104,7 @@ export default function MeetingForm() {
         await upload(id, file, setProgress);
         setUploaded(true);
       }
+      if(!standalone)await api(`/meetings/${id}/analysis-flow`,'PUT',{mode:advanceMode});
       if(file||transcript.trim())await api(`/meetings/${id}/process`, "POST");
       navigate(`/meetings/${id}`);
     } catch (e) {
@@ -238,6 +240,7 @@ export default function MeetingForm() {
           </p>
 
           <MinutesTemplate value={template} onChange={setTemplate} disabled={busy || !!createdId} />
+          {!standalone&&<label className="analysis-flow-choice">AI 단계 진행 방식<select aria-label="새 회의 분석 진행 방식" value={advanceMode} disabled={busy} onChange={e=>setAdvanceMode(e.target.value as 'AUTO'|'CONFIRM')}><option value="AUTO">자동으로 다음 단계 진행</option><option value="CONFIRM">각 단계 결과 확인 후 진행</option></select><small>확인 모드는 각 단계가 끝나면 멈추고 결과 확인 후 이어갑니다.</small></label>}
           {error && (
             <div className="error" role="alert">
               {error}

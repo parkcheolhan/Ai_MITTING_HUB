@@ -66,9 +66,10 @@ def main():
             result.append({"start": segment.start, "end": segment.end, "text": text})
         if not result:
             raise ValueError("NO_SPEECH")
-        if args.speaker_dir and Path(args.speaker_dir, "segmentation.onnx").is_file() and Path(args.speaker_dir, "embedding.onnx").is_file():
-            from diarize import identify
-            result = identify(samples, result, args.speaker_dir)
+        if not args.speaker_dir:
+            raise ValueError("SPEAKER_MODEL_MISSING")
+        from diarize import identify
+        result = identify(samples, result, args.speaker_dir)
         Path(args.output).write_text(json.dumps({"segments": result, "language": info.language}, ensure_ascii=False), encoding="utf-8")
     except Exception as error:
         codes = {"MODEL_MISSING", "NO_AUDIO", "TOO_LONG", "NO_SPEECH", "SPEAKER_MODEL_MISSING"}
