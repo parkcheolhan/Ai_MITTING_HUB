@@ -28,7 +28,7 @@ test('waiting stages survive reload, allow inline text edits and require explici
   await page.getByLabel('00:00:00 발언 내용',{exact:true}).fill('현장에서 바로 수정한 문구입니다.');
   await page.getByRole('button',{name:'수정 문구 적용',exact:true}).click();
   await expect(page.locator('.transcript-text-fragment')).toHaveText('현장에서 바로 수정한 문구입니다.');
-  await expect(page.getByText('음성 정보가 부족한 구간 포함 · 화자 매칭 추정',{exact:true})).toBeVisible();
+  await expect(page.getByText('음성 정보가 부족한 구간 포함 · 화자 매칭 추정',{exact:true})).toHaveCount(0);
   expect(continuations).toBe(0);
   await page.getByRole('button',{name:'확인 후 다음 단계 진행',exact:true}).click();
   await expect(page.locator('.job-steps li').nth(3)).toContainText('확인 대기');

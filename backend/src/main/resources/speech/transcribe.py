@@ -14,6 +14,7 @@ def main():
     parser.add_argument("--output")
     parser.add_argument("--language", default="ko")
     parser.add_argument("--speaker-dir")
+    parser.add_argument("--max-speakers",type=int,default=0)
     parser.add_argument("--segments")
     args = parser.parse_args()
     try:
@@ -46,7 +47,7 @@ def main():
         samples = decode_audio(args.input, sampling_rate=16000)
         if args.segments:
             from diarize import identify
-            result = identify(samples, json.loads(Path(args.segments).read_text(encoding="utf-8")), args.speaker_dir)
+            result = identify(samples, json.loads(Path(args.segments).read_text(encoding="utf-8")), args.speaker_dir,args.max_speakers or None)
             Path(args.output).write_text(json.dumps({"segments": result}, ensure_ascii=False), encoding="utf-8")
             return
         model = WhisperModel(args.model_dir, device="cpu", compute_type="int8",
@@ -69,7 +70,7 @@ def main():
         if not args.speaker_dir:
             raise ValueError("SPEAKER_MODEL_MISSING")
         from diarize import identify
-        result = identify(samples, result, args.speaker_dir)
+        result = identify(samples, result, args.speaker_dir,args.max_speakers or None)
         Path(args.output).write_text(json.dumps({"segments": result, "language": info.language}, ensure_ascii=False), encoding="utf-8")
     except Exception as error:
         codes = {"MODEL_MISSING", "NO_AUDIO", "TOO_LONG", "NO_SPEECH", "SPEAKER_MODEL_MISSING"}

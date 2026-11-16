@@ -6,7 +6,7 @@ import {groupConsecutiveSegments} from './transcriptGroups';
 import {useAiSettings} from './ai';
 import {standalone} from './standalone';
 
-export default function TranscriptView({meeting, disabled, reload, seek, playbackMs=-1}: {meeting: Meeting; disabled: boolean; reload: () => Promise<void>; seek: (ms: number) => void; playbackMs?:number}) {
+export default function TranscriptView({meeting, disabled, reload, seek, playbackMs=-1}: {meeting: Meeting; disabled: boolean; reload: () => Promise<void>; seek: (ms: number,endMs?:number) => void; playbackMs?:number}) {
   const [start,setStart]=useState("00:00:00");
   const [interval,setInterval]=useState(30);
   const [query,setQuery]=useState("");
@@ -33,7 +33,7 @@ export default function TranscriptView({meeting, disabled, reload, seek, playbac
       setEditing(false);setTexts({});await reload();setMessage('음성 기록을 저장했습니다. 기존 회의록·업무·Jira 내용은 자동 변경되지 않으므로 필요하면 다시 분석하세요.');
     }catch(e){setError((e as Error).message);}finally{setBusy(false);}
   }
-  async function reviewText(){setBusy(true);setError('');setMessage('');try{await api(`/meetings/${meeting.id}/transcript/review`,'POST');await reload();setMessage('AI 문맥 교정을 시작했습니다. 완료 후 교정 전 원문과 비교해 확인하세요.');}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+  async function reviewText(){setBusy(true);setError('');setMessage('');try{await api(`/meetings/${meeting.id}/transcript/review`,'POST');await reload();setMessage('AI 문맥 교정을 시작했습니다. 완료 후 문구를 확인하세요.');}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
   const active=meeting.content.segments.filter(s=>!s.estimatedTime&&s.startMs<=playbackMs&&playbackMs<s.endMs).reduce<(typeof meeting.content.segments)[number]|undefined>((latest,s)=>!latest||s.startMs>latest.startMs?s:latest,undefined);
   useEffect(()=>{
     if(!follow||!active||editing)return;
@@ -65,13 +65,10 @@ export default function TranscriptView({meeting, disabled, reload, seek, playbac
       <div className="transcript-playback"><span>{active?`재생 중 · ${active.speaker} · ${time(active.startMs)}`:"발언을 선택하면 해당 구간을 재생합니다."}</span><label><input type="checkbox" checked={follow} onChange={e=>setFollow(e.target.checked)}/>재생 발언 따라가기</label></div>
       <div className="transcript-document" ref={documentRef}>{groups.map(g=>{
         const first=g.segments[0],playing=g.segments.some(s=>s.id===active?.id);
-        const changed=g.segments.filter(s=>meeting.content.originalTranscriptText?.[s.id]!==undefined&&meeting.content.originalTranscriptText[s.id]!==s.text);
         return <div className="transcript-utterance" key={g.id} data-active={playing} aria-current={playing?'true':undefined}>
-          <div className="transcript-utterance-heading"><button onClick={()=>seek(first.startMs)} aria-label={`${g.speaker} ${time(first.startMs)} 재생`}><strong>{g.speaker}</strong><span>{time(first.startMs)}{g.segments.some(s=>s.estimatedTime)?' · 추정':''}</span></button><button disabled={disabled||busy||editing} onClick={()=>beginEdit(g.id)} aria-label={`${time(first.startMs)} 문구 수정`}>문구 수정</button></div>
-          {g.segments.some(s=>s.speakerAssignment==='ESTIMATED')&&<small className="speaker-estimated">음성 정보가 부족한 구간 포함 · 화자 매칭 추정</small>}
-          {editing&&(!editingGroup||editingGroup===g.id)?g.segments.map(s=><label className="transcript-text-editor" key={s.id}>{time(s.startMs)} 발언 내용<textarea aria-label={`${time(s.startMs)} 발언 내용`} rows={3} value={texts[s.id]??s.text} disabled={disabled||busy} maxLength={200000} onChange={e=>setTexts(t=>({...t,[s.id]:e.target.value}))}/></label>):<p>{g.segments.map(s=><span key={s.id}><button className="transcript-text-fragment" data-playback-active={active?.id===s.id} onClick={()=>seek(s.startMs)} aria-label={`${time(s.startMs)} 발언 재생`}>{s.text}</button>{' '}</span>)}</p>}
+          <div className="transcript-utterance-heading"><button onClick={()=>seek(first.startMs,g.segments.at(-1)!.endMs)} aria-label={`${g.speaker} ${time(first.startMs)} 재생`}><strong>{g.speaker}</strong><span>{time(first.startMs)}{g.segments.some(s=>s.estimatedTime)?' · 추정':''}</span></button><button disabled={disabled||busy||editing} onClick={()=>beginEdit(g.id)} aria-label={`${time(first.startMs)} 문구 수정`}>문구 수정</button></div>
+          {editing&&(!editingGroup||editingGroup===g.id)?g.segments.map(s=><label className="transcript-text-editor" key={s.id}>{time(s.startMs)} 발언 내용<textarea aria-label={`${time(s.startMs)} 발언 내용`} rows={3} value={texts[s.id]??s.text} disabled={disabled||busy} maxLength={200000} onChange={e=>setTexts(t=>({...t,[s.id]:e.target.value}))}/></label>):<p>{g.segments.map(s=><span key={s.id}><button className="transcript-text-fragment" data-playback-active={active?.id===s.id} onClick={()=>seek(s.startMs,s.endMs)} aria-label={`${time(s.startMs)} 발언 재생`}>{s.text}</button>{' '}</span>)}</p>}
           {editing&&editingGroup===g.id&&<div className="actions transcript-inline-actions"><button className="primary" disabled={disabled||busy||!dirty} onClick={()=>void saveText()}>수정 문구 적용</button><button disabled={busy} onClick={cancelEdit}>문구 수정 취소</button></div>}
-          {!!changed.length&&<details className="transcript-original"><summary>처음 수정 전 원문 보기</summary>{changed.map(s=><p key={s.id}>{time(s.startMs)} · {meeting.content.originalTranscriptText?.[s.id]}</p>)}</details>}
         </div>;
       })}{!segments.length&&<p className="empty">{query?"검색 결과가 없습니다.":"아직 음성 기록이 없습니다."}</p>}</div>
     </section>
@@ -87,7 +84,7 @@ export default function TranscriptView({meeting, disabled, reload, seek, playbac
       <button disabled={disabled||busy||editing||!meeting.content.segments.length} onClick={()=>void apply()}>{busy?"시간 저장 중…":"전체 시간 적용"}</button>
       {error&&<p className="error" role="alert">{error}</p>}{saved&&<p role="status">전체 발언 시간을 저장했습니다.</p>}
       <label><input type="checkbox" checked={showTimes} onChange={e=>setShowTimes(e.target.checked)} />전체 발언 시간 표시</label>
-      {showTimes&&segments.map(s=><div className="segment" key={s.id}><button className="timestamp" onClick={()=>seek(s.startMs)}>{time(s.startMs)}{s.estimatedTime&&<small>추정 시간</small>}</button><div><strong>{s.speaker}</strong><p>{s.text}</p><small>종료 {time(s.endMs)}</small></div></div>)}
+      {showTimes&&segments.map(s=><div className="segment" key={s.id}><button className="timestamp" onClick={()=>seek(s.startMs,s.endMs)}>{time(s.startMs)}{s.estimatedTime&&<small>추정 시간</small>}</button><div><strong>{s.speaker}</strong><p>{s.text}</p><small>종료 {time(s.endMs)}</small></div></div>)}
     </section>
   </>;
 }

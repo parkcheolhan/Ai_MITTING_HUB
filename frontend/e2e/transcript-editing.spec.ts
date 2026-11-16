@@ -36,8 +36,8 @@ test('edits transcript, groups only consecutive speakers and retains source timi
   await page.reload();
   await expect(page.locator('.transcript-utterance')).toHaveCount(3);
   await expect(page.locator('.transcript-utterance').first()).toContainText('주간보고 때 초안을 검토합니다.');
-  await page.getByText('처음 수정 전 원문 보기',{exact:true}).click();
-  await expect(page.locator('.transcript-original')).toContainText('주간복 때 초연을 검토합니다.');
+  await expect(page.getByText('처음 수정 전 원문 보기',{exact:true})).toHaveCount(0);
+  expect(meeting.content.originalTranscriptText.a).toBe('주간복 때 초연을 검토합니다.');
   expect(segments[0].startMs).toBe(0);expect(segments[1].id).toBe('b');
   await page.getByRole('button',{name:'음성 기록 편집',exact:true}).click();
   await page.getByLabel('00:00:03 발언 내용',{exact:true}).fill('저장하지 않을 내용');

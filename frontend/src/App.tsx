@@ -628,6 +628,28 @@ function MeetingDetail() {
     [focus, setFocus] = useState<Item | null>(null);
   const media = useRef<Record<string, HTMLVideoElement | null>>({});
   const playingAsset = useRef<string|null>(null);
+  const clip=useRef<{assetId:string;endMs:number;offset:number}|null>(null);
+  const clipTimer=useRef<number|null>(null);
+  function clearClipTimer(){if(clipTimer.current!==null){window.clearTimeout(clipTimer.current);clipTimer.current=null;}}
+  useEffect(()=>()=>{clearClipTimer();clip.current=null;},[id,location.pathname,location.search]);
+  function stopClip(player:HTMLVideoElement){
+    const current=clip.current;if(!current)return;
+    clip.current=null;clearClipTimer();player.pause();
+    player.currentTime=(current.endMs-current.offset)/1000;
+    playingAsset.current=null;setPlaybackMs(-1);
+  }
+  function enforceClip(assetId:string,player:HTMLVideoElement){
+    const current=clip.current;
+    if(current?.assetId===assetId&&player.currentTime*1000+current.offset>=current.endMs){stopClip(player);return true;}
+    return false;
+  }
+  function scheduleClip(assetId:string,player:HTMLVideoElement){
+    const current=clip.current;if(!current||current.assetId!==assetId)return;
+    clearClipTimer();if(player.paused)return;
+    if(enforceClip(assetId,player))return;
+    const remaining=(current.endMs-current.offset-player.currentTime*1000)/Math.max(.1,player.playbackRate);
+    clipTimer.current=window.setTimeout(()=>{if(!enforceClip(assetId,player))scheduleClip(assetId,player);},Math.max(10,remaining+5));
+  }
   const [playbackMs,setPlaybackMs]=useState(-1);
   useEffect(()=>{playingAsset.current=null;setPlaybackMs(-1);},[id]);
   useEffect(() => {
@@ -689,10 +711,16 @@ function MeetingDetail() {
     const times=m.content.segments.filter(s=>(m.content.speakerGroups?.[s.id]||"").startsWith(`원본 ${index+1} ·`)).map(s=>s.startMs);
     return {asset,offset:index===0?0:times.length?Math.min(...times):null};
   });
-  function seek(ms: number) {
+  function seek(ms: number,endMs?:number) {
     const source=[...sources].reverse().find(s=>s.offset!==null&&s.offset<=ms);
     const player=source&&media.current[source.asset.id];
-    if(player&&source){playingAsset.current=source.asset.id;Object.values(media.current).forEach(p=>{if(p!==player)p?.pause();});player.currentTime=(ms-source.offset!)/1000;setPlaybackMs(ms);void player.play().catch(()=>{});}
+    if(player&&source){
+      clearClipTimer();const segment=m!.content.segments.find(s=>s.startMs===ms)||m!.content.segments.find(s=>s.startMs<=ms&&s.endMs>ms);
+      const stop=endMs??segment?.endMs;const boundary=sources.find(s=>s.offset!==null&&s.offset>source.offset!)?.offset;
+      clip.current=stop!==undefined&&stop>ms?{assetId:source.asset.id,endMs:Math.min(stop,boundary??Infinity),offset:source.offset!}:null;
+      playingAsset.current=source.asset.id;Object.values(media.current).forEach(p=>{if(p!==player)p?.pause();});
+      player.currentTime=(ms-source.offset!)/1000;setPlaybackMs(ms);void player.play().then(()=>scheduleClip(source.asset.id,player)).catch(()=>{});
+    }
   }
   return (
     <>
@@ -772,10 +800,14 @@ function MeetingDetail() {
               <p>{a.originalName}</p>
               <AuthenticatedVideo
                 ref={node=>{media.current[a.id]=node;}}
-                onPlay={e=>{playingAsset.current=a.id;Object.values(media.current).forEach(p=>{if(p!==e.currentTarget)p?.pause();});setPlaybackMs(offset===null?-1:offset+e.currentTarget.currentTime*1000);}}
-                onSeeking={e=>{playingAsset.current=a.id;setPlaybackMs(offset===null?-1:offset+e.currentTarget.currentTime*1000);}}
-                onTimeUpdate={e=>{if(!playingAsset.current||playingAsset.current===a.id)setPlaybackMs(offset===null?-1:offset+e.currentTarget.currentTime*1000);}}
-                onEnded={()=>{if(!playingAsset.current||playingAsset.current===a.id){playingAsset.current=null;setPlaybackMs(-1);}}}
+                onPlay={e=>{if(clip.current&&clip.current.assetId!==a.id){clearClipTimer();clip.current=null;}playingAsset.current=a.id;Object.values(media.current).forEach(p=>{if(p!==e.currentTarget)p?.pause();});if(!enforceClip(a.id,e.currentTarget)){setPlaybackMs(offset===null?-1:offset+e.currentTarget.currentTime*1000);scheduleClip(a.id,e.currentTarget);}}}
+                onSeeking={e=>{playingAsset.current=a.id;if(!enforceClip(a.id,e.currentTarget)){setPlaybackMs(offset===null?-1:offset+e.currentTarget.currentTime*1000);scheduleClip(a.id,e.currentTarget);}}}
+                onTimeUpdate={e=>{if((!playingAsset.current||playingAsset.current===a.id)&&!enforceClip(a.id,e.currentTarget))setPlaybackMs(offset===null?-1:offset+e.currentTarget.currentTime*1000);}}
+                onPlaying={e=>scheduleClip(a.id,e.currentTarget)}
+                onPause={()=>{if(clip.current?.assetId===a.id)clearClipTimer();}}
+                onWaiting={()=>{if(clip.current?.assetId===a.id)clearClipTimer();}}
+                onRateChange={e=>scheduleClip(a.id,e.currentTarget)}
+                onEnded={()=>{if(clip.current?.assetId===a.id){clearClipTimer();clip.current=null;}if(!playingAsset.current||playingAsset.current===a.id){playingAsset.current=null;setPlaybackMs(-1);}}}
                 controls
                 path={`/meetings/${id}/assets/${a.id}`}
                 style={{ width: "100%", maxHeight: 250 }}

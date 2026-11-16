@@ -1,5 +1,31 @@
 import {test,expect} from '@playwright/test';
 
+test('clicked utterances and speaker groups stop at their own boundaries',async({page})=>{
+  const segments=[{id:'a',speaker:'화자 1',startMs:0,endMs:2000,text:'첫 발언',estimatedTime:false},{id:'b',speaker:'화자 1',startMs:2000,endMs:4000,text:'이어지는 발언',estimatedTime:false},{id:'c',speaker:'화자 2',startMs:4000,endMs:6000,text:'다음 화자 발언',estimatedTime:false}];
+  const meeting={id:'bounded-playback',title:'구간 재생',status:'REVIEW_PENDING',createdAt:new Date().toISOString(),drafts:[],jobs:[],epics:[],content:{occurredAt:'',projectKey:'TEST',participants:[],source:'MEDIA',language:'ko',template:'일반',segments,minutes:null,items:[],assets:[{id:'audio',originalName:'sample.wav',mediaType:'audio/wav',size:10}]}};
+  await page.route('**/api/**',route=>route.fulfill({json:new URL(route.request().url()).pathname==='/api/meetings/bounded-playback'?meeting:[]}));
+  await page.goto('/meetings/bounded-playback?tab=transcript');
+  const video=page.locator('video');
+  await video.evaluate(element=>{
+    const v=element as HTMLVideoElement&{testClock:number;testPaused:boolean};v.testClock=0;v.testPaused=true;
+    Object.defineProperty(v,'currentTime',{get:()=>v.testClock,set:(n:number)=>{v.testClock=n;v.dispatchEvent(new Event('seeking'));}});
+    Object.defineProperty(v,'paused',{get:()=>v.testPaused});
+    v.play=async()=>{v.testPaused=false;v.dispatchEvent(new Event('play'));};
+    v.pause=()=>{v.testPaused=true;v.dispatchEvent(new Event('pause'));};
+  });
+  async function tick(seconds:number){await video.evaluate((element,time)=>{(element as HTMLVideoElement&{testClock:number}).testClock=time;element.dispatchEvent(new Event('timeupdate'));},seconds);}
+  await page.getByRole('button',{name:'00:00:00 발언 재생',exact:true}).click();
+  await tick(1.9);expect(await video.evaluate(v=>v.paused)).toBe(false);
+  await tick(2.2);expect(await video.evaluate(v=>v.paused)).toBe(true);expect(await video.evaluate(v=>v.currentTime)).toBe(2);
+  await page.getByRole('button',{name:'화자 1 00:00:00 재생',exact:true}).click();
+  await tick(3);expect(await video.evaluate(v=>v.paused)).toBe(false);
+  await tick(4.1);expect(await video.evaluate(v=>v.paused)).toBe(true);expect(await video.evaluate(v=>v.currentTime)).toBe(4);
+  await page.getByRole('button',{name:'00:00:00 발언 재생',exact:true}).click();
+  await page.getByRole('button',{name:'00:00:04 발언 재생',exact:true}).click();
+  await tick(4.5);expect(await video.evaluate(v=>v.paused)).toBe(false);
+  await tick(6.1);expect(await video.evaluate(v=>v.paused)).toBe(true);expect(await video.evaluate(v=>v.currentTime)).toBe(6);
+});
+
 test('playback focuses matching speech, supports search and manual follow control',async({page})=>{
   const segments=Array.from({length:20},(_,i)=>({id:`s${i}`,speaker:`참석자 ${i%2+1}`,text:`발언 내용 ${i}`,startMs:i*5000,endMs:(i+1)*5000,estimatedTime:false}));
   const meeting={id:'playback',title:'음성 검증',status:'REVIEW_PENDING',createdAt:new Date().toISOString(),drafts:[],jobs:[],epics:[],content:{occurredAt:'',projectKey:'DEMO',participants:[],source:'MEDIA',language:'ko',template:'일반',diarization:false,segments,minutes:null,items:[],assets:[{id:'audio',originalName:'회의.wav',mediaType:'audio/wav',size:10}]}};

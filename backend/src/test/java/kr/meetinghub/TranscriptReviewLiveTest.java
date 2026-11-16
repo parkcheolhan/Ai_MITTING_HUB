@@ -26,4 +26,13 @@ class TranscriptReviewLiveTest {
         assertThat(result.get(1).text()).contains("들려요").doesNotContain("들린다");
         System.out.println("Synthetic dialogue correction: "+result.get(0).text()+" / "+result.get(1).text());
     }
+    @Test void resolvesMisheardDeicticUsingNeighbouringTurnsWithoutReplacingGenuineLanguageNames(){
+        var ai=new CodexIntelligence(new AiConfig("codex","codex-default",""),new ObjectMapper());
+        var scene=List.of(new Segment("a","화자 1",0,2000,"방금 틀어본 영상 다시 확인해 봐.",false),new Segment("b","화자 1",2000,4000,"한국 말풍선에 글자 없었지?",false),new Segment("c","화자 2",4000,6000,"응, 방금 재생한 장면에는 글자가 안 보였어.",false));
+        var corrected=ai.reviewTranscript("방금 재생한 영상 시안 확인",scene);
+        assertThat(corrected.get(1).text()).contains("방금 말풍선에 글자 없었지?");
+        var language=List.of(new Segment("a","화자 1",0,2000,"한국어 버전과 영어 버전 말풍선 글자를 비교해 봅시다.",false),new Segment("b","화자 2",2000,4000,"한국 말풍선에 글자 없었지?",false));
+        assertThat(ai.reviewTranscript("한국어와 영어 버전 비교",language).get(1).text()).contains("한국").doesNotContain("방금");
+        System.out.println("Synthetic deictic correction: "+corrected.get(1).text());
+    }
 }

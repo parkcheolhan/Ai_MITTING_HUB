@@ -24,7 +24,7 @@ public class LocalSpeech implements Adapters.SpeechToText {
         boolean windows=System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win");
         this.python=Path.of(python.isBlank()?root.resolve(windows?".tools/speech/Scripts/python.exe":".tools/speech/bin/python").toString():python).toAbsolutePath().normalize();
         this.modelDir=Path.of(modelDir.isBlank()?root.resolve(".tools/speech-models/small").toString():modelDir).toAbsolutePath().normalize();
-        this.timeoutSeconds=timeoutSeconds;this.runner=this::run;
+        this.timeoutSeconds=timeoutSeconds;this.runner=null;
     }
     LocalSpeech(ObjectMapper json,Path uploadDir,Runner runner){this.json=json;this.uploadDir=uploadDir.toAbsolutePath().normalize();this.python=Path.of("python");this.modelDir=Path.of("model");this.timeoutSeconds=30;this.runner=runner;}
     public Map<String,Object> status(){boolean ready=Files.isRegularFile(python)&&Files.isRegularFile(modelDir.resolve("model.bin"))&&Files.isRegularFile(modelDir.resolve("config.json"));var speakerDir=modelDir.toAbsolutePath().getParent().resolve("speakers");boolean speakers=Files.isRegularFile(speakerDir.resolve("segmentation.onnx"))&&Files.isRegularFile(speakerDir.resolve("embedding.onnx"));return Map.of("ready",ready,"speakerReady",speakers,"provider","local-whisper","model","small","message",ready?(speakers?"음성 전사·화자 구분 준비 완료":"음성 전사 준비 완료 · 화자 모델은 scripts/setup-speech.ps1로 준비하세요."):"로컬 음성 엔진을 준비하세요. 서버에서 scripts/setup-speech.ps1을 실행하세요.");}
@@ -35,10 +35,11 @@ public class LocalSpeech implements Adapters.SpeechToText {
         var asset=content.assets.get(0);MeetingService.require(asset.storageKey()!=null&&asset.storageKey().matches("[a-zA-Z0-9-]+\\.(mp3|wav|m4a|aac|acc|mp4|webm)"),"녹음 파일 경로가 잘못되었습니다.");
         Path path=uploadDir.resolve(asset.storageKey()).normalize();MeetingService.require(path.startsWith(uploadDir)&&Files.isRegularFile(path,LinkOption.NOFOLLOW_LINKS),"녹음 원본을 찾을 수 없습니다.");
         var rows=content.segments.stream().map(s->Map.of("start",s.startMs()/1000.0,"end",s.endMs()/1000.0,"text",s.text())).toList();
-        var parsed=parse(run(path,content.language,cancelled,rows),0);MeetingService.require(parsed.size()==content.segments.size(),"화자 분석 결과의 발언 수가 일치하지 않습니다.");
+        var parsed=parse(run(path,content.language,cancelled,rows,content.participants.size()),0);MeetingService.require(parsed.size()==content.segments.size(),"화자 분석 결과의 발언 수가 일치하지 않습니다.");
         var assignedNames=new HashMap<String,Set<String>>();
         for(int i=0;i<parsed.size();i++)if(content.participants.contains(content.segments.get(i).speaker()))assignedNames.computeIfAbsent(parsed.get(i).speaker(),k->new HashSet<>()).add(content.segments.get(i).speaker());
-        var result=new ArrayList<Segment>();for(int i=0;i<parsed.size();i++){var old=content.segments.get(i);var matched=parsed.get(i);var names=assignedNames.getOrDefault(matched.speaker(),Set.of());String name=content.participants.contains(old.speaker())?old.speaker():names.size()==1?names.iterator().next():matched.speaker();result.add(new Segment(old.id(),name,old.startMs(),old.endMs(),old.text(),old.estimatedTime(),matched.speakerAssignment(),matched.speakerSimilarity()));}return result;
+        var result=new ArrayList<Segment>();for(int i=0;i<parsed.size();i++){var old=content.segments.get(i);var matched=parsed.get(i);var names=assignedNames.getOrDefault(matched.speaker(),Set.of());String name=names.size()==1?names.iterator().next():matched.speaker();result.add(new Segment(old.id(),name,old.startMs(),old.endMs(),old.text(),old.estimatedTime(),matched.speakerAssignment(),matched.speakerSimilarity()));}
+        MeetingService.require(content.participants.isEmpty()||result.stream().map(Segment::speaker).distinct().count()<=content.participants.size(),"화자가 지정된 발언자 수를 초과했습니다. 화자 분석을 다시 실행하세요.");return result;
     }
     @Override public List<Segment> transcribe(Content content,BooleanSupplier cancelled){
         if(!content.segments.isEmpty())return content.segments;
@@ -47,7 +48,7 @@ public class LocalSpeech implements Adapters.SpeechToText {
         for(var asset:content.assets){
             MeetingService.require(asset.storageKey()!=null&&asset.storageKey().matches("[a-zA-Z0-9-]+\\.(mp3|wav|m4a|aac|acc|mp4|webm)"),"녹음 파일 경로가 잘못되었습니다.");
             Path path=uploadDir.resolve(asset.storageKey()).normalize();MeetingService.require(path.startsWith(uploadDir)&&Files.isRegularFile(path,LinkOption.NOFOLLOW_LINKS),"저장된 녹음·녹화 파일을 찾을 수 없습니다.");
-            var parsed=parse(runner.transcribe(path,Objects.toString(content.language,"ko"),cancelled),offset);
+            var parsed=parse(runner==null?run(path,Objects.toString(content.language,"ko"),cancelled,null,content.participants.size()):runner.transcribe(path,Objects.toString(content.language,"ko"),cancelled),offset);
             assetNumber++;if(content.assets.size()>1){String prefix="원본 "+assetNumber+" · ";parsed=parsed.stream().map(s->new Segment(s.id(),prefix+s.speaker(),s.startMs(),s.endMs(),s.text(),s.estimatedTime(),s.speakerAssignment(),s.speakerSimilarity())).toList();}
             results.addAll(parsed);offset=parsed.get(parsed.size()-1).endMs();
             MeetingService.require(results.size()<=3000,"녹음이 너무 깁니다. 회의를 나누어 등록하세요.");
@@ -76,6 +77,9 @@ public class LocalSpeech implements Adapters.SpeechToText {
         return run(input,language,cancelled,null);
     }
     JsonNode run(Path input,String language,BooleanSupplier cancelled,Object segments){
+        return run(input,language,cancelled,segments,0);
+    }
+    JsonNode run(Path input,String language,BooleanSupplier cancelled,Object segments,int maxSpeakers){
         MeetingService.require((boolean)status().get("ready"),"음성 엔진이 준비되지 않았습니다. 서버에서 scripts/setup-speech.ps1을 실행하세요.");
         Process process=null;Path temp=null;boolean acquired=false;
         try{
@@ -85,6 +89,7 @@ public class LocalSpeech implements Adapters.SpeechToText {
             try(var resource=getClass().getResourceAsStream("/speech/transcribe.py")){if(resource==null)throw new java.io.IOException();Files.copy(resource,script);}
             try(var resource=getClass().getResourceAsStream("/speech/diarize.py")){if(resource==null)throw new java.io.IOException();Files.copy(resource,temp.resolve("diarize.py"));}
             var command=new ArrayList<>(List.of(python.toString(),script.toString(),"--model-dir",modelDir.toString(),"--input",input.toString(),"--output",output.toString(),"--language",language,"--speaker-dir",modelDir.getParent().resolve("speakers").toString()));
+            if(maxSpeakers>0)command.addAll(List.of("--max-speakers",Integer.toString(maxSpeakers)));
             if(segments!=null){Path source=temp.resolve("segments.json");Files.writeString(source,json.writeValueAsString(segments),StandardCharsets.UTF_8);command.addAll(List.of("--segments",source.toString()));}
             var builder=new ProcessBuilder(command).redirectOutput(ProcessBuilder.Redirect.DISCARD).redirectError(ProcessBuilder.Redirect.DISCARD);
             builder.environment().put("HF_HUB_OFFLINE","1");builder.environment().put("PYTHONUTF8","1");

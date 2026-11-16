@@ -28,7 +28,7 @@ def load_engine(model_dir):
         return sherpa_onnx.OfflineSpeakerDiarization(config)
 
 
-def identify(audio, segments, model_dir):
+def identify(audio, segments, model_dir, max_speakers=None):
     engine = load_engine(model_dir)
     turns = engine.process(audio).sort_by_start_time()
     import sherpa_onnx
@@ -53,7 +53,7 @@ def identify(audio, segments, model_dir):
                 value = extractor.compute(stream)
         cache[key] = value
         return value
-    return assign_speakers(segments, turns, embedding)
+    return assign_speakers(segments, turns, embedding, max_speakers)
 
 
 def unit_vector(value):
@@ -65,15 +65,36 @@ def unit_vector(value):
     return vector / length if length > 0 and np.isfinite(vector).all() else None
 
 
-def assign_speakers(segments, turns, embedding):
+def assign_speakers(segments, turns, embedding, max_speakers=None):
     """Prefer diarization evidence; fill gaps by voice similarity, never by text."""
     import numpy as np
     references = {}
+    mapping = {turn.speaker: turn.speaker for turn in turns}
+    weights = {speaker: sum(t.end-t.start for t in turns if t.speaker == speaker) for speaker in mapping}
     for speaker in sorted({turn.speaker for turn in turns}):
         samples = sorted((t for t in turns if t.speaker == speaker), key=lambda t: t.end-t.start, reverse=True)[:3]
         vectors = [v for t in samples if (v := unit_vector(embedding(t.start, t.end))) is not None]
         if vectors:
             references[speaker] = unit_vector(np.mean(vectors, axis=0))
+    # Agglomerate the closest acoustic prototypes until the configured upper
+    # bound is respected. This is an upper bound, not a forced speaker count.
+    if max_speakers:
+        while len(set(mapping.values())) > max_speakers:
+            ids = sorted(set(mapping.values()))
+            pairs = [(float(np.dot(references[a], references[b])), a, b) for i,a in enumerate(ids) for b in ids[i+1:] if a in references and b in references]
+            if pairs:
+                _,a,b = max(pairs)
+            else:
+                a,b = sorted(ids,key=lambda k:weights.get(k,0))[:2]
+            if a in references and b in references:
+                combined = unit_vector(references[a]*weights.get(a,1)+references[b]*weights.get(b,1))
+                if combined is not None:
+                    references[a] = combined
+            elif b in references:
+                references[a] = references[b]
+            references.pop(b,None)
+            weights[a] = weights.get(a,0)+weights.get(b,0)
+            mapping = {key:a if value==b else value for key,value in mapping.items()}
     next_speaker = max([t.speaker for t in turns] + [-1]) + 1
     labels = {}
     for segment in segments:
@@ -86,7 +107,7 @@ def assign_speakers(segments, turns, embedding):
         matched = max(overlaps, key=overlaps.get) if overlaps else None
         similarity = None
         if matched is not None and overlaps[matched] >= max(0.12, duration*0.25):
-            speaker, method = matched, "DIARIZATION"
+            speaker, method = mapping[matched], "DIARIZATION"
         else:
             vector = unit_vector(embedding(segment["start"], segment["end"]))
             scores = sorted(((float(np.dot(vector, reference)), speaker) for speaker, reference in references.items()), reverse=True) if vector is not None else []
@@ -94,19 +115,23 @@ def assign_speakers(segments, turns, embedding):
                 similarity, speaker = scores[0]
                 margin = similarity-scores[1][0] if len(scores)>1 else 1.0
                 method = "VOICE_MATCH" if similarity >= 0.45 and margin >= 0.08 and duration >= 0.6 else "ESTIMATED"
-                if similarity < 0.15 and duration >= 1.5:
+                if similarity < 0.15 and duration >= 1.5 and (not max_speakers or len(set(mapping.values())|set(references))<max_speakers):
                     speaker, method = next_speaker, "NEW_VOICE"
                     next_speaker += 1
                     references[speaker] = vector
             elif vector is not None:
-                speaker, method = next_speaker, "NEW_VOICE"
-                next_speaker += 1
+                existing = set(mapping.values()) | set(references) | set(labels)
+                if max_speakers and len(existing) >= max_speakers:
+                    speaker, method = min(existing), "VOICE_MATCH"
+                else:
+                    speaker, method = next_speaker, "NEW_VOICE"
+                    next_speaker += 1
                 references[speaker] = vector
             else:
                 # No reliable acoustic features: retain a numbered provisional
                 # match, explicitly marked estimated rather than claiming certainty.
                 nearest = min(turns, key=lambda t: min(abs(t.start-segment["end"]), abs(t.end-segment["start"]))) if turns else None
-                speaker, method = (nearest.speaker if nearest else 0), "ESTIMATED"
+                speaker, method = (mapping.get(nearest.speaker,nearest.speaker) if nearest else 0), "ESTIMATED"
         if speaker not in labels:
             labels[speaker] = f"화자 {len(labels) + 1}"
         segment["speaker"] = labels[speaker]
