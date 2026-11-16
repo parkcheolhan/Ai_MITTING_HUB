@@ -15,6 +15,6 @@ export default function ServerConnection({children}:{children:ReactNode}){
       setConnected(true);
     }catch(err){rememberConnection(old);setError(err instanceof TypeError?'서버에 연결할 수 없습니다. 서버·터널 실행 및 허용된 Pages 주소를 확인하세요.':(err as Error).message);}finally{setBusy(false);}
   }
-  if(connected)return <><div style={{padding:'8px 24px',background:'#e5f1ed',display:'flex',gap:16,alignItems:'center',flexWrap:'wrap'}}><span>로컬 서버 연결 · {connection().server}</span><button onClick={disconnect}>서버 변경 / 연결 해제</button></div>{children}</>;
+  if(connected)return <><div className="server-connection-bar"><span>로컬 서버 연결 · {connection().server}</span><button onClick={disconnect}>서버 변경 / 연결 해제</button></div>{children}</>;
   return <main style={{maxWidth:640,margin:'8vh auto',padding:24}}><h1>모아 · 서버 연결</h1><p>GitHub Pages 화면에서 내 PC의 AI Meeting Hub 서버에 연결합니다.</p><form onSubmit={connect}><fieldset disabled={busy} style={{border:0,padding:0}}><label>API 서버 HTTPS 주소<input type="url" required value={server} onChange={e=>setServer(e.target.value)} placeholder="https://api.example.com"/></label><label>접속 토큰<input type="password" required autoComplete="off" value={token} onChange={e=>setToken(e.target.value)}/></label><p>토큰은 이 탭의 세션에만 저장합니다. AI·Jira 키는 연결 후 서버 설정에서 입력하세요.</p><button className="primary">{busy?'연결 확인 중…':'서버 연결'}</button></fieldset></form>{error&&<p role="alert" className="error">{error}</p>}</main>;
 }

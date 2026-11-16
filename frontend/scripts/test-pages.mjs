@@ -12,7 +12,7 @@ try{
   page.on('pageerror',e=>errors.push(e.message));
   page.on('request',r=>{if(r.url().startsWith(config.apiUrl+'/api/'))apiRequests.push(r);});
   // Serve the prepared HTML under the exact Pages origin, with real browser CORS.
-  await page.route(config.pagesOrigin+'/**',route=>route.fulfill({status:200,contentType:'text/html',body:html}));
+  if(!process.env.E2E_PUBLISHED)await page.route(config.pagesOrigin+'/**',route=>route.fulfill({status:200,contentType:'text/html',body:html}));
   await page.route(config.apiUrl+'/**',async route=>{
     const r=route.request(),path=new URL(r.url()).pathname;
     const headers={'Access-Control-Allow-Origin':config.pagesOrigin,'Access-Control-Allow-Headers':'Authorization,Content-Type,Range','Access-Control-Allow-Methods':'GET,POST,PUT,DELETE,OPTIONS'};

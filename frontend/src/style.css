@@ -147,6 +147,19 @@ p {
 small {
   font-size: 12px;
 }
+.server-connection-bar {
+  margin-left: 228px;
+  padding: 8px 24px;
+  background: #e5f1ed;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1150px) { .server-connection-bar { margin-left: 195px; } }
+@media (max-width: 850px) { .server-connection-bar { margin-left: 72px; } }
+@media (max-width: 580px) { .server-connection-bar { margin-left: 58px; padding: 8px 15px; } }
 .app {
   display: flex;
   min-height: 100vh;
