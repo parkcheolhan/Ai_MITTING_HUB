@@ -44,6 +44,7 @@ public final class Domain {
         public String generationMode="mock",generationModel="rules";
     }
     public static class Content {
+        public boolean epicBoardEnabled;
         public String analysisAdvanceMode="AUTO";
         public Map<String,String> originalTranscriptText = new LinkedHashMap<>();
         public int transcriptRevision;
@@ -65,7 +66,11 @@ public final class Domain {
     public record Asset(String id, String originalName, String mediaType, long size, String storageKey) {}
     public record MeetingView(String id, String title, String status, String createdAt,
         Content content, List<Draft> drafts, List<Job> jobs,List<EpicView> epics) {}
-    public record EpicView(String id,String projectKey,String summary,String status,String issueKey,String issueUrl,String error,String contentStatus,String contentError){}
+    public record EpicView(String id,String projectKey,String summary,String status,String issueKey,String issueUrl,String error,String contentStatus,String contentError,boolean external,boolean currentTarget){}
+    public record JiraEpic(String key,String projectKey,String summary,String status,String issueUrl){}
+    public record JiraEpicPage(List<JiraEpic> epics,String nextPageToken){}
+    public record AddEpic(@Size(max=100) String issueKey,@Size(max=200) String summary){}
+    public record MoveEpic(@Size(max=80) String epicId,@Min(0) long version){}
     public record DraftInput(@NotBlank @Size(max=20) String projectKey, @NotBlank String issueType,
         @NotBlank @Size(max=255) String summary, @NotBlank @Size(max=30000) String description,
         String assignee, String priority, String dueDate, List<String> labels, String parent,
@@ -110,6 +115,7 @@ public final class Domain {
         @ElementCollection(fetch=FetchType.EAGER) public Set<String> dependencyDraftIds=new LinkedHashSet<>();
         public String parentDraftId="";
         public String epicKey="";
+        public String epicId="";
         public String registrationMode="NEW",existingIssueKey="";
         @ElementCollection(fetch=FetchType.EAGER) public Set<String> labels = new LinkedHashSet<>();
         @ElementCollection(fetch=FetchType.EAGER) public Set<String> analysisItemIds = new LinkedHashSet<>();

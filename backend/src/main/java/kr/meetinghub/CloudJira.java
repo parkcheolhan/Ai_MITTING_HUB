@@ -130,6 +130,35 @@ public class CloudJira implements Adapters.Jira {
     @Override public List<Map<String,String>> projects() {
         return pages("/project/search","values").stream().map(n->Map.of("key",n.path("key").asText(),"name",n.path("name").asText())).toList();
     }
+    @Override public JiraEpicPage epics(String project,String query,String nextPageToken){
+        projectKey(project);query=Objects.toString(query,"").strip();nextPageToken=Objects.toString(nextPageToken,"");
+        MeetingService.require(query.length()<=200&&nextPageToken.length()<=4000,"에픽 검색 조건을 확인하세요.");
+        var types=issueTypes(project).stream().filter(t->"1".equals(t.get("hierarchyLevel"))||Set.of("Epic","에픽").contains(t.get("name"))).map(t->t.get("id")).filter(id->id.matches("[0-9]+")).toList();
+        MeetingService.require(!types.isEmpty(),"이 프로젝트에서 에픽 유형을 찾을 수 없습니다.");
+        String jql="project = "+project+" AND issuetype in ("+String.join(",",types)+")";
+        if(!query.isBlank()){
+            if(query.toUpperCase(Locale.ROOT).matches("[A-Z][A-Z0-9_]*-[0-9]+"))jql+=" AND key = "+query.toUpperCase(Locale.ROOT);
+            else{String words=query.replaceAll("[^\\p{L}\\p{N}\\s]"," ").replaceAll("\\s+"," ").strip();MeetingService.require(!words.isBlank(),"에픽 제목이나 이슈 키로 검색하세요.");jql+=" AND summary ~ \""+words+"\"";}
+        }
+        jql+=" ORDER BY updated DESC";
+        String path="/search/jql?jql="+encode(jql)+"&fields=summary,project,issuetype,status&maxResults=50";
+        if(!nextPageToken.isBlank())path+="&nextPageToken="+encode(nextPageToken);
+        var node=request("GET",path,null,false);MeetingService.require(node.path("issues").isArray(),"Jira 에픽 목록을 읽을 수 없습니다.");
+        var rows=new ArrayList<JiraEpic>();for(var issue:node.path("issues"))rows.add(epicView(project,issue));
+        return new JiraEpicPage(rows,node.path("nextPageToken").asText(""));
+    }
+    @Override public JiraEpic epic(String project,String key){
+        projectKey(project);issueKey(key);
+        var node=request("GET","/issue/"+key+"?fields=summary,project,issuetype,status",null,false);
+        MeetingService.require(key.equals(node.path("key").asText()),"에픽 조회 결과를 확인하세요.");
+        return epicView(project,node);
+    }
+    JiraEpic epicView(String project,JsonNode node){
+        var fields=node.path("fields");var type=fields.path("issuetype");String key=node.path("key").asText();issueKey(key);
+        MeetingService.require(project.equals(fields.path("project").path("key").asText()),"같은 프로젝트의 에픽만 추가할 수 있습니다.");
+        MeetingService.require(!type.path("subtask").asBoolean()&&(type.path("hierarchyLevel").asInt(0)==1||Set.of("Epic","에픽").contains(type.path("name").asText())),"선택한 이슈가 에픽이 아닙니다.");
+        return new JiraEpic(key,project,fields.path("summary").asText(),fields.path("status").path("name").asText(),config.siteUrl()+"/browse/"+key);
+    }
     @Override public JiraUserPage assignableUsers(String project,String query,String accountId,int startAt){
         projectKey(project);MeetingService.require(startAt>=0&&startAt<=10000&&Objects.toString(query,"").length()<=200&&Objects.toString(accountId,"").length()<=200,"담당자 검색 조건을 확인하세요.");
         String path="/user/assignable/search?project="+encode(project)+"&startAt="+startAt+"&maxResults=51";

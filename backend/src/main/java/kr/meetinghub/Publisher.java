@@ -22,10 +22,16 @@ public class Publisher {
         return selected.stream().map(id->{try{
             var d=drafts.findById(id).orElseThrow(MeetingService::missing);
             if(!"EXISTING".equals(d.registrationMode)&&Objects.toString(d.parentDraftId,"").isBlank()&&Set.of("APPROVED","FAILED").contains(d.status)&&adapter.target().equals(d.approvedTarget)&&(d.publishTarget==null||adapter.target().equals(d.publishTarget))){
-                String group=d.meetingId+"|"+d.projectKey;
-                var epic=outcomes.computeIfAbsent(group,k->epicPublisher.ensure(d.meetingId,d.projectKey,adapter));
+                String chosen=Objects.toString(d.epicId,"");
+                if(chosen.isBlank()&&epicPublisher.json.readValue(meetings.findById(d.meetingId).orElseThrow().payload,Content.class).epicBoardEnabled){
+                    chosen=epicPublisher.epics.findByMeetingId(d.meetingId).stream().filter(e->Objects.equals(e.issueKey,d.epicKey)&&!Objects.toString(d.epicKey,"").isBlank()&&e.target.equals(adapter.target())).map(e->e.id).findFirst().orElse("");
+                    if(chosen.isBlank())return new Result(id,"BLOCKED",null,null,"티켓을 에픽 박스에 배치한 뒤 등록하세요.");
+                }
+                final String epicId=chosen;
+                String group=epicId.isBlank()?d.meetingId+"|"+d.projectKey:epicId;
+                var epic=outcomes.computeIfAbsent(group,k->epicId.isBlank()?epicPublisher.ensure(d.meetingId,d.projectKey,adapter):epicPublisher.ensureSelected(epicId,d.meetingId,d.projectKey,adapter));
                 if(!epic.status.equals("PUBLISHED"))return new Result(id,"BLOCKED",null,null,"에픽이 먼저 등록되어야 합니다. 에픽 상태: "+epic.status+". "+Objects.toString(epic.error,"잠시 후 등록 결과를 다시 확인하세요."));
-                if(!"SYNCED".equals(epic.contentStatus))return new Result(id,"BLOCKED",null,null,"에픽 회의록·녹음 첨부를 먼저 완료하세요. "+Objects.toString(epic.contentError,"동기화가 필요합니다."));
+                if(!epic.external&&!"SYNCED".equals(epic.contentStatus))return new Result(id,"BLOCKED",null,null,"에픽 회의록·녹음 첨부를 먼저 완료하세요. "+Objects.toString(epic.contentError,"동기화가 필요합니다."));
                 return publish(id,adapter,epic.issueKey);
             }
             return publish(id,adapter);
@@ -53,6 +59,7 @@ public class Publisher {
                 if(!Objects.toString(parent.parentDraftId,"").isBlank()||(!parent.parent.isBlank()&&!parent.parent.equals(parent.epicKey)))
                     return new Claim(null,new Result(id,"BLOCKED",null,null,"하위 티켓은 한 단계만 등록할 수 있습니다."),false);
                 d.parent=parent.issueKey;
+                d.epicId=parent.epicId;d.epicKey=parent.epicKey;
             }
             if(d.status.equals("UNKNOWN"))return new Claim(d,null,true);
             if(!Set.of("APPROVED","FAILED").contains(d.status))return new Claim(null,new Result(id,"BLOCKED",null,null,"사용자 승인이 필요합니다."),false);

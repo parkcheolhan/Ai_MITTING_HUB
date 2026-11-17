@@ -37,6 +37,11 @@ public final class Adapters {
         default List<Map<String,String>> projects() { return List.of(Map.of("key","DEMO","name","제품 개발 (Mock)"),Map.of("key","PLATFORM","name","플랫폼 (Mock)")); }
         default List<Map<String,String>> issueTypes(String project) { return List.of(Map.of("id","Task","name","Task"),Map.of("id","Bug","name","Bug"),Map.of("id","Story","name","Story"),Map.of("id","Epic","name","Epic","hierarchyLevel","1"),Map.of("id","Sub-task","name","Sub-task","subtask","true")); }
         default List<Map<String,Object>> fields(String project,String type) { return List.of(); }
+        default JiraEpicPage epics(String project,String query,String nextPageToken){
+            var rows=List.of(new JiraEpic(project+"-100",project,"서비스 개선 (Mock)","진행 중",null),new JiraEpic(project+"-200",project,"운영 안정화 (Mock)","할 일",null));
+            return new JiraEpicPage(rows.stream().filter(e->(e.key()+" "+e.summary()).toLowerCase(Locale.ROOT).contains(query.toLowerCase(Locale.ROOT))).toList(),"");
+        }
+        default JiraEpic epic(String project,String key){return epics(project,"","").epics().stream().filter(e->e.key().equals(key)).findFirst().orElseThrow(()->new IllegalArgumentException("해당 프로젝트의 에픽을 선택하세요."));}
         default JiraUserPage assignableUsers(String project,String query,String accountId,int startAt){
             var users=List.of(new JiraUser("mock-minsu","김민수 (Mock)",true),new JiraUser("mock-jieun","이지은 (Mock)",true),new JiraUser("mock-seojun","박서준 (Mock)",true)).stream().filter(u->(accountId==null||accountId.isBlank()||u.accountId().equals(accountId))&&(query==null||(u.displayName()+u.accountId()).toLowerCase(Locale.ROOT).contains(query.toLowerCase(Locale.ROOT)))).toList();
             return new JiraUserPage(startAt==0?users:List.of(),false,startAt+users.size());

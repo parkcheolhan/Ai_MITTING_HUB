@@ -24,5 +24,7 @@ public class ConfiguredJira implements Adapters.Jira {
     @Override public List<Map<String,String>> projects(){return snapshot().projects();}
     @Override public List<Map<String,String>> issueTypes(String project){return snapshot().issueTypes(project);}
     @Override public List<Map<String,Object>> fields(String project,String type){return snapshot().fields(project,type);}
+    @Override public JiraEpicPage epics(String project,String query,String nextPageToken){return snapshot().epics(project,query,nextPageToken);}
+    @Override public JiraEpic epic(String project,String key){return snapshot().epic(project,key);}
     @Override public JiraUserPage assignableUsers(String project,String query,String accountId,int startAt){return snapshot().assignableUsers(project,query,accountId,startAt);}
 }

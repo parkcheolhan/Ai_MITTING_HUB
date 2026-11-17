@@ -67,6 +67,7 @@ export type Draft = {
   registrationMode?: "NEW" | "EXISTING";
   existingIssueKey?: string;
   epicKey?: string;
+  epicId?: string;
   analysisItemIds: string[];
   status: string;
   issueKey: string | null;
@@ -87,8 +88,9 @@ export type Job = {
   progress: number;
   errorMessage: string | null;
 };
+export type MeetingEpic={id:string;projectKey:string;summary:string;status:string;issueKey:string|null;issueUrl:string|null;error:string|null;contentStatus?:string;contentError?:string|null;external?:boolean;currentTarget?:boolean};
 export type Meeting = {
-  epics?: {id:string;projectKey:string;summary:string;status:string;issueKey:string|null;issueUrl:string|null;error:string|null;contentStatus?:string;contentError?:string|null}[];
+  epics?: MeetingEpic[];
   id: string;
   title: string;
   status: string;
@@ -143,6 +145,7 @@ export const statusName: Record<string, string> = {
   FAILED: "실패",
   CANCELLED: "취소됨",
   DRAFT: "초안",
+  PENDING: "등록 대기",
   APPROVED: "승인됨",
   PUBLISHED: "등록 완료",
   PUBLISHING: "등록 중",

@@ -21,6 +21,9 @@ public class Api {
     @PostMapping("/meetings") @ResponseStatus(HttpStatus.CREATED)
     public MeetingView create(@Valid @RequestBody CreateMeeting input) { return service.create(input); }
     @GetMapping("/meetings/{id}") public MeetingView get(@PathVariable String id) { return service.get(id); }
+    @org.springframework.beans.factory.annotation.Autowired EpicBoard epicBoard;
+    @PostMapping("/meetings/{id}/epics") public MeetingView addEpic(@PathVariable String id,@Valid @RequestBody AddEpic input){return epicBoard.add(id,input);}
+    @PutMapping("/ticket-drafts/{id}/epic") public List<Draft> moveEpic(@PathVariable String id,@Valid @RequestBody MoveEpic input){return epicBoard.move(id,input);}
     @PostMapping("/meetings/{id}/epics/sync") public List<EpicView> syncEpics(@PathVariable String id){
         service.get(id);var jira=integration.jira.snapshot();
         service.epics().findByMeetingId(id).stream().filter(e->e.status.equals("PUBLISHED")&&e.target.equals(jira.target())).forEach(e->publisher.epicPublisher.contents.sync(e.id,jira));
@@ -115,6 +118,7 @@ public class Api {
     }
     @PostMapping("/integrations/jira/test") public Map<String,Object> test() { return integration.jira.test(); }
     @GetMapping("/integrations/jira/projects") public List<Map<String,String>> projects() { return integration.jira.projects(); }
+    @GetMapping("/integrations/jira/projects/{key}/epics") public JiraEpicPage epics(@PathVariable String key,@RequestParam(defaultValue="") String query,@RequestParam(defaultValue="") String nextPageToken){return integration.jira.epics(key,query,nextPageToken);}
     @GetMapping("/integrations/jira/projects/{key}/issue-types") public List<Map<String,String>> issueTypes(@PathVariable String key) { return integration.jira.issueTypes(key); }
     @GetMapping("/integrations/jira/projects/{key}/assignees") public JiraUserPage assignees(@PathVariable String key,@RequestParam(defaultValue="") String query,@RequestParam(defaultValue="") String accountId,@RequestParam(defaultValue="0") int startAt){return integration.jira.assignableUsers(key,query,accountId,startAt);}
     @GetMapping("/integrations/jira/projects/{key}/issue-types/{type}/fields") public List<Map<String,Object>> fields(@PathVariable String key,@PathVariable String type) { return integration.jira.fields(key,type); }

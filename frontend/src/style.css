@@ -1735,6 +1735,40 @@ dd {
 .subtask-list .candidate { background: rgba(69, 145, 113, 0.08); }
 .subtask-actions { margin-bottom: 16px; flex-wrap: wrap; }
 .epic-summary { margin: 16px 0; }
+.epic-ticket-board { padding:14px; min-width:0; }
+.epic-board-toolbar { display:flex; gap:12px; align-items:center; justify-content:space-between; margin-bottom:16px; position:sticky; top:0; z-index:2; background:white; padding:10px 0; }
+.epic-board-toolbar strong { font-size:14px; }
+.epic-board-toolbar p { color:var(--muted); font-size:11px; line-height:1.6; margin:6px 0 0; }
+.epic-board-toolbar button { padding:8px 10px; font-size:12px; }
+.epic-lookup { padding:14px; margin-bottom:16px; border:1px solid #cbdad0; background:#f5f9f6; border-radius:10px; }
+.epic-lookup form { display:flex; flex-wrap:wrap; align-items:end; gap:10px; }
+.epic-lookup label { flex:1 1 170px; min-width:0; display:flex; flex-direction:column; gap:8px; font-size:12px; }
+.epic-lookup input { width:100%; min-width:0; }
+.epic-lookup button { padding:10px; font-size:12px; }
+.epic-search-results { max-height:280px; overflow-y:auto; margin:14px 0; }
+.epic-search-results > div { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); }
+.epic-search-results > div > div { min-width:0; overflow-wrap:anywhere; }
+.epic-search-results strong { font-size:13px; }
+.epic-search-results small { display:block; font-size:11px; color:var(--muted); margin-top:6px; }
+.epic-create { border-top:1px solid #d5e1d8; padding-top:14px; margin-top:16px; }
+.epic-create .help { width:100%; margin:0; font-size:11px; }
+.epic-drop-box { border:1px solid #adc7b7; border-radius:10px; padding:12px; background:#f3f8f5; margin-top:14px; transition:background .15s; min-width:0; }
+.epic-drop-box.unassigned { background:#f7f8f7; border-style:dashed; border-color:#bfcac3; }
+.epic-drop-box.drag-over { background:#dcf0e4; outline:3px solid #23815b; outline-offset:-2px; }
+.epic-box-heading { display:flex; justify-content:space-between; gap:10px; margin:3px 2px 12px; }
+.epic-box-heading h3 { margin:6px 0; font-size:15px; overflow-wrap:anywhere; }
+.epic-box-heading p { margin:0; color:var(--muted); font-size:11px; }
+.epic-box-heading .eyebrow { font-size:10px; }
+.epic-task-group { margin-top:12px; border:1px solid #d2dfd6; border-radius:8px; background:white; overflow:hidden; }
+.epic-task-group[draggable="true"] { cursor:grab; }
+.epic-task-group.dragging { opacity:.45; }
+.epic-placement { display:flex; align-items:center; gap:8px; justify-content:space-between; padding:8px 10px; background:#edf4ef; }
+.epic-placement > span { font-size:10px; color:#526b5b; white-space:nowrap; }
+.epic-placement select { min-width:0; width:65%; font-size:11px; padding:6px; }
+.epic-task-group .candidate { border-radius:0; }
+.epic-drop-placeholder { color:var(--muted); font-size:12px; text-align:center; padding:16px 6px; margin:0; line-height:1.6; }
+.epic-board-notice { background:#e9f5ed; padding:12px; border-radius:7px; font-size:12px; line-height:1.7; }
+@media(max-width:650px) { .epic-ticket-board { padding:10px; } .epic-board-toolbar { align-items:flex-start; } .epic-drop-box { padding:10px; } }
 .epic-result { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
 .project-space-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-bottom: 24px; }
 .project-space-import { display: flex; flex-direction: column; gap: 9px; margin-top: 18px; }
@@ -2342,6 +2376,7 @@ main:has(.ticket-review) > footer { display: none; }
 .ticket-editor-body { display: flow-root; min-width: 0; padding: 24px; background: white; border: 1px solid var(--border); border-top: 0; border-radius: 0 0 8px 8px; clip-path: inset(var(--editor-clip-top, 0px) 0 0 0); }
 .ticket-editor textarea.auto-size-textarea { overflow: hidden; resize: none; max-height: none; min-height: 180px; }
 @media(max-width:850px) { .ticket-review-workspace > .review-grid { grid-template-rows: auto auto; } .ticket-review-workspace .review-grid > .candidate-panel { position: relative; top: auto; max-height: 320px; } }
+@media(max-width:850px) { .ticket-review-workspace .review-grid > .candidate-panel:has(.epic-ticket-board) { max-height:min(720px,calc(100dvh - 60px)); } }
 .transcript-reader { margin: 24px 0; border: 1px solid #dbe5df; border-radius: 12px; overflow: hidden; }
 .transcript-reader-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 20px 24px; background: #f7faf8; }
 .transcript-reader-toolbar h3 { margin: 0 0 6px; }

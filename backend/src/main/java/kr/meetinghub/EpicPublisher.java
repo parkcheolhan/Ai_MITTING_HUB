@@ -20,8 +20,13 @@ public class EpicPublisher {
     record Claim(Epic epic,boolean reconcile,boolean send){}
     public Epic ensure(String meetingId,String project,Adapters.Jira jira){
         String id=UUID.nameUUIDFromBytes((meetingId+"|"+project+"|"+jira.target()).getBytes(StandardCharsets.UTF_8)).toString();
+        return ensure(id,meetingId,project,jira,false);
+    }
+    public Epic ensureSelected(String id,String meetingId,String project,Adapters.Jira jira){return ensure(id,meetingId,project,jira,true);}
+    Epic ensure(String id,String meetingId,String project,Adapters.Jira jira,boolean selected){
         var claim=tx.execute(s->{
             var meeting=meetings.locked(meetingId).orElseThrow(MeetingService::missing);
+            if(selected)MeetingService.require(epics.existsById(id),"선택한 에픽을 찾을 수 없습니다.");
             var epic=epics.findById(id).orElseGet(()->{
                 var e=new Epic();e.id=id;e.meetingId=meetingId;e.projectKey=project;e.target=jira.target();
                 e.summary=("[회의] "+meeting.title);if(e.summary.length()>200)e.summary=e.summary.substring(0,200);
@@ -29,12 +34,13 @@ public class EpicPublisher {
                 catch(Exception ignored){e.description="회의 업무 묶음: /meetings/"+meetingId;}
                 return e;
             });
+            MeetingService.require(epic.meetingId.equals(meetingId)&&epic.projectKey.equals(project)&&epic.target.equals(jira.target()),"에픽의 회의·프로젝트·Jira 대상이 다릅니다.");
             if(Set.of("PUBLISHED","PUBLISHING").contains(epic.status))return new Claim(epic,false,false);
             boolean reconcile=epic.status.equals("UNKNOWN");
             if(!reconcile){epic.status="PUBLISHING";epic.error=null;epics.saveAndFlush(epic);audits.save(new Audit("EPIC_PUBLISH_STARTED",id));}
             return new Claim(epic,reconcile,true);
         });
-        if(!claim.send())return claim.epic().status.equals("PUBLISHED")?contents.sync(id,jira):claim.epic();
+        if(!claim.send())return claim.epic().status.equals("PUBLISHED")&&!claim.epic().external?contents.sync(id,jira):claim.epic();
         try{
             Draft draft=asDraft(claim.epic());Result result;
             if(claim.reconcile()){
@@ -55,6 +61,7 @@ class Epic {
     public String meetingId,projectKey,target,summary,status="PENDING",issueKey,issueUrl;
     @Column(columnDefinition="text") public String description;
     public String contentStatus="PENDING";
+    @Column(nullable=false,columnDefinition="boolean default false") public boolean external;
     @Column(length=2000) public String contentError;
     @Column(length=2000) public String error;
     @Version public long version;

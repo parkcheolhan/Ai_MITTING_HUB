@@ -33,6 +33,7 @@ public class EpicContents {
     public synchronized Epic sync(String id,Adapters.Jira jira){
         var epic=epics.findById(id).orElseThrow(MeetingService::missing);
         MeetingService.require(epic.status.equals("PUBLISHED")&&epic.target.equals(jira.target()),"에픽의 등록 상태와 Jira 대상을 확인하세요.");
+        if(epic.external)return epic;
         try{
             var meeting=meetings.findById(epic.meetingId).orElseThrow(MeetingService::missing);
             var content=json.readValue(meeting.payload,Content.class);

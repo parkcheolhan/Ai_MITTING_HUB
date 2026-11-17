@@ -12,6 +12,7 @@ import AssigneeSelect, {type JiraUser} from "./AssigneeSelect";
 import AutoSizeTextarea from "./AutoSizeTextarea";
 import SchedulePanel, {displayDateTime,localDateTime,offsetDateTime} from "./SchedulePanel";
 import {ensureAiSchedule} from "./ensureAiSchedule";
+import EpicTicketBoard, {assignedEpicId} from './EpicTicketBoard';
 import { MinutesTemplateDialog, downloadText } from "./MinutesTemplate";
 import SettingsPage from "./JiraSettingsPage";
 import ProjectSpacesPage, {type ProjectSpace} from "./ProjectSpacesPage";
@@ -1227,6 +1228,7 @@ function TicketReview({
     }
   }
   const selectedDrafts = meeting.drafts.filter((d) => selected.includes(d.id));
+  const unplacedSelection=selectedDrafts.some(d=>d.registrationMode!=="EXISTING"&&!d.parentDraftId&&!["PUBLISHED","UNKNOWN"].includes(d.status)&&!assignedEpicId(d,meeting.epics||[]));
   const projectCorrection=!!current&&current.projectKey!==meeting.content.projectKey;
   const invalidSelectedProject=selectedDrafts.some(d=>d.projectKey!==meeting.content.projectKey)||(real&&projectsLoaded&&selectedDrafts.some(d=>!projects.some(p=>p.key===d.projectKey)));
   const approved =
@@ -1313,11 +1315,11 @@ function TicketReview({
       {projectCorrection&&<p className="help">기존 후보의 프로젝트가 회의와 다릅니다. 초안을 저장하면 회의 프로젝트 '{meeting.content.projectKey}'가 적용됩니다.</p>}
       <ErrorBox error={error} />
       <div className="notice epic-summary">
-        <strong>에픽 → 업무 티켓 → 하위 작업 순서로 등록합니다</strong>
-        <p>새 업무 등록 시 에픽 설명에 회의록 전체를 작성하고, 등록한 녹음·영상 원본을 첨부합니다. 이후 같은 에픽을 재사용합니다. 에픽 제목은 ‘[회의] {meeting.title}’입니다. 기존 이슈 연결은 원본을 변경하지 않습니다.</p>
-        {meeting.epics?.map(e=><div className="epic-result" key={e.id}><span className="project-chip">{e.projectKey} · 에픽</span><Badge status={e.status}/>{e.issueUrl?<a href={e.issueUrl} target="_blank" rel="noopener noreferrer">{e.issueKey} ↗</a>:<span>{e.issueKey||"발급 대기"}</span>}{e.error&&<span className="warning">{e.error}</span>}</div>)}
-        {meeting.epics?.filter(e=>e.status==="PUBLISHED").map(e=><p key={e.id} className={e.contentError?'warning':'help'}>{e.issueKey} · {e.contentStatus==="SYNCED"?`회의록·원본 동기화 완료 (등록 원본 ${meeting.content.assets.length}개)`:(e.contentError||'회의록·원본 동기화 필요')}</p>)}
-        {meeting.epics?.some(e=>e.status==="PUBLISHED")&&<button disabled={busy||dirty} onClick={()=>run(async()=>{await api(`/meetings/${meeting.id}/epics/sync`,"POST");})}>에픽 회의록·녹음 동기화</button>}
+        <strong>에픽을 추가하고 업무 티켓을 배치하세요</strong>
+        <p>후보 목록의 ‘에픽 조회·추가’에서 기존 에픽을 조회하거나 새 에픽 박스를 추가하세요. 업무를 박스로 드래그하면 하위업무도 함께 이동합니다. 이동 후 다시 승인하면 배치한 에픽 아래에 등록됩니다.</p>
+        {unplacedSelection&&<p className="warning" role="status">선택한 업무를 에픽 박스에 배치한 뒤 등록하세요.</p>}
+        {meeting.epics?.filter(e=>e.status==="PUBLISHED"&&!e.external).map(e=><p key={e.id} className={e.contentError?'warning':'help'}>{e.issueKey} · {e.contentStatus==="SYNCED"?`회의록·원본 동기화 완료 (등록 원본 ${meeting.content.assets.length}개)`:(e.contentError||'회의록·원본 동기화 필요')}</p>)}
+        {meeting.epics?.some(e=>e.status==="PUBLISHED"&&!e.external)&&<button disabled={busy||dirty} onClick={()=>run(async()=>{await api(`/meetings/${meeting.id}/epics/sync`,"POST");})}>에픽 회의록·녹음 동기화</button>}
       </div>
       {real&&projectsLoaded&&current&&!projects.some(p=>p.key===current.projectKey)&&<div className="error" role="alert">초안의 프로젝트 '{current.projectKey}'는 현재 Jira에서 조회되지 않습니다. 티켓은 회의 프로젝트 '{meeting.content.projectKey}'로 저장됩니다. 회의 프로젝트의 Jira 접근 권한을 확인하고 초안을 저장하세요.</div>}
       <div className="ticket-review-workspace">
@@ -1359,7 +1361,7 @@ function TicketReview({
           </button>
           <button
             className="primary"
-            disabled={!approved || busy || dirty || !jiraSettings.ready || invalidSelectedProject}
+            disabled={!approved || busy || dirty || !jiraSettings.ready || invalidSelectedProject || unplacedSelection}
             onClick={() =>
               run(async () => {
                 const results = await api<{ status: string; error?: string }[]>(
@@ -1412,10 +1414,10 @@ function TicketReview({
           </div>
           {meeting.drafts.some(d=>!!d.parentDraftId)&&<div className="candidate-toolbar"><button onClick={()=>setExpanded(roots.map(d=>d.id))}>하위 후보 모두 펼치기</button><button onClick={()=>setExpanded([])}>접기</button></div>}
           <div className="candidate-scroll" role="region" aria-label="티켓 후보 목록" tabIndex={0}>
-          {roots.map(d=><div className="candidate-group" key={d.id}>
+          <EpicTicketBoard meeting={meeting} roots={roots} disabled={busy||dirty} onBusyChange={setBusy} reload={reload} renderRoot={d=><div className="candidate-group" key={d.id}>
             {candidate(d)}
             {expanded.includes(d.id)&&childDrafts(d.id).length>0&&<div className="subtask-list" aria-label={`${d.summary} 하위 티켓`}>{childDrafts(d.id).map(child=>candidate(child,true))}</div>}
-          </div>)}
+          </div>}/>
           {!meeting.drafts.length && (
             <Empty>업무 분석에서 JIRA 후보를 생성하세요.</Empty>
           )}

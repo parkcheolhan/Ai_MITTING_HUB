@@ -39,7 +39,7 @@ public class MeetingService {
     }
     public List<MeetingView> list() { return meetings.findAllByOrderByCreatedAtDesc().stream().map(this::view).toList(); }
     public MeetingView get(String id) { return view(meetings.findById(id).orElseThrow(MeetingService::missing)); }
-    MeetingView view(Meeting m) { return new MeetingView(m.id,m.title,m.status,m.createdAt,content(m),drafts.findByMeetingId(m.id),jobs.findByMeetingIdOrderByCreatedAtDesc(m.id),epics.findByMeetingId(m.id).stream().map(e->new EpicView(e.id,e.projectKey,e.summary,e.status,e.issueKey,e.issueUrl,e.error,e.contentStatus,e.contentError)).toList()); }
+    MeetingView view(Meeting m) { String target=jira.target();return new MeetingView(m.id,m.title,m.status,m.createdAt,content(m),drafts.findByMeetingId(m.id),jobs.findByMeetingIdOrderByCreatedAtDesc(m.id),epics.findByMeetingId(m.id).stream().map(e->new EpicView(e.id,e.projectKey,e.summary,e.status,e.issueKey,e.issueUrl,e.error,e.contentStatus,e.contentError,e.external,e.target.equals(target))).toList()); }
     public MeetingView create(CreateMeeting input) {
         MinutesTemplate.validate(input.template());
         var m=new Meeting(); m.title=input.title().trim(); var c=new Content();
@@ -354,7 +354,7 @@ public class MeetingService {
     }
     static boolean sameTime(String a,String b){if(Objects.equals(Objects.toString(a,""),Objects.toString(b,"")))return true;try{return java.time.OffsetDateTime.parse(a).toInstant().equals(java.time.OffsetDateTime.parse(b).toInstant());}catch(Exception e){return false;}}
     void apply(Draft d,DraftInput in) {
-        boolean clearEpic=!Objects.toString(d.epicKey,"").isBlank()&&(!d.projectKey.equals(in.projectKey())||("EXISTING".equals(in.registrationMode())&&!"EXISTING".equals(d.registrationMode)));
+        boolean clearEpic=(!Objects.toString(d.epicKey,"").isBlank()||!Objects.toString(d.epicId,"").isBlank())&&(!d.projectKey.equals(in.projectKey())||("EXISTING".equals(in.registrationMode())&&!"EXISTING".equals(d.registrationMode)));
         String registration=in.registrationMode()==null?Objects.toString(d.registrationMode,"NEW"):in.registrationMode();
         String existingKey=in.existingIssueKey()==null?Objects.toString(d.existingIssueKey,""):in.existingIssueKey().strip().toUpperCase(Locale.ROOT);
         require(Set.of("NEW","EXISTING").contains(registration),"등록 방식은 새 이슈 또는 기존 이슈 연결을 선택하세요.");
@@ -392,7 +392,7 @@ public class MeetingService {
             for(var depId:in.dependencyDraftIds()){var dep=drafts.findById(depId).orElseThrow(MeetingService::missing);require(!depId.equals(d.id)&&dep.meetingId.equals(d.meetingId),"같은 회의의 다른 업무만 선행 업무로 지정하세요.");}
             d.dependencyDraftIds=new LinkedHashSet<>(in.dependencyDraftIds());
         }
-        if(clearEpic){if(d.parent.equals(d.epicKey))d.parent="";d.epicKey="";}
+        if(clearEpic){if(d.parent.equals(d.epicKey))d.parent="";d.epicKey="";d.epicId="";}
         d.parentDraftId=parentId;
         d.labels=new LinkedHashSet<>(in.labels()==null?List.of():in.labels());
         if(in.analysisItemIds()!=null) {
