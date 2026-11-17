@@ -14,6 +14,8 @@ import SchedulePanel, {displayDateTime,localDateTime,offsetDateTime} from "./Sch
 import {ensureAiSchedule} from "./ensureAiSchedule";
 import EpicTicketBoard, {assignedEpicId} from './EpicTicketBoard';
 import TicketDetailsDrawer from './TicketDetailsDrawer';
+import RelatedTickets from './RelatedTickets';
+import {ConfluenceMinutes} from './Confluence';
 import { MinutesTemplateDialog, downloadText } from "./MinutesTemplate";
 import SettingsPage from "./JiraSettingsPage";
 import ProjectSpacesPage, {type ProjectSpace} from "./ProjectSpacesPage";
@@ -1063,6 +1065,7 @@ function MinutesEditor({
       {templateOpen&&<MinutesTemplateDialog value={meeting.content.template||"일반"} onApply={applyTemplate} onClose={()=>setTemplateOpen(false)} disabled={disabled} applying={templateBusy}/>}
       {templateApplied&&<p className="help" role="status">회의록 양식을 적용했습니다.</p>}
       {saved&&<p className="help" role="status">회의록을 저장했습니다.</p>}
+      <ConfluenceMinutes meeting={meeting} disabled={disabled||saving||editing||templateBusy}/>
       {editing&&<p className="minutes-edit-help">문서 순서대로 각 항목을 편집하세요. 입력 영역의 오른쪽 아래를 끌어 높이를 조절할 수 있습니다. 편집 후 상단의 ‘회의록 저장’을 누르세요.</p>}
       {minutes&&!editing?<MinutesDocument meeting={meeting} minutes={minutes}/>:minutes?.formatted ? (
         <label className="minutes-custom-editor">업로드 양식으로 작성한 회의록
@@ -1113,6 +1116,7 @@ function TicketReview({
   resultPath?: string;
 }) {
   const navigate = useNavigate();
+  const requestedTicket=new URLSearchParams(useLocation().search).get('ticket');
   const jiraSettings = useJiraSettings();
   const aiSettings = useAiSettings();
   const aiRunning = !!activeJob(meeting);
@@ -1121,14 +1125,14 @@ function TicketReview({
   const [issueTypes, setIssueTypes] = useState<IssueType[]>([]);
   const [jiraFields, setJiraFields] = useState<JiraField[]>([]);
   const [selected, setSelected] = useState<string[]>([]),
-    [focusId, setFocusId] = useState(meeting.drafts[0]?.id || ""),
+    [focusId, setFocusId] = useState(meeting.drafts.some(d=>d.id===requestedTicket)?requestedTicket!:meeting.drafts[0]?.id||""),
     [edit, setEdit] = useState<Draft | null>(null),
     [dirty, setDirty] = useState(false),
     [error, setError] = useState(""),
     [operationBusy, setBusy] = useState(false);
   const [savingField,setSavingField]=useState("");
   const [assigneeMessage,setAssigneeMessage]=useState("");
-  const [drawerOpen,setDrawerOpen]=useState(false);
+  const [drawerOpen,setDrawerOpen]=useState(!!requestedTicket&&meeting.drafts.some(d=>d.id===requestedTicket));
   const approvalToolbar=useRef<HTMLDivElement>(null);
   useEffect(()=>{
     const toolbar=approvalToolbar.current,workspace=toolbar?.parentElement;if(!toolbar||!workspace)return;
@@ -1289,7 +1293,7 @@ function TicketReview({
         <p>‘에픽 조회·추가’에서 기존 에픽이나 새 에픽 박스를 추가하고 업무를 배치하세요. 이동 후 다시 승인하면 배치한 에픽 아래에 등록됩니다. 업무를 우클릭하면 삭제 메뉴가 열립니다.</p>
         {unplacedSelection&&<p className="warning" role="status">선택한 업무를 에픽 박스에 배치한 뒤 등록하세요.</p>}
         {meeting.epics?.filter(e=>e.status==="PUBLISHED"&&!e.external).map(e=><p key={e.id} className={e.contentError?'warning':'help'}>{e.issueKey} · {e.contentStatus==="SYNCED"?`회의록·원본 동기화 완료 (등록 원본 ${meeting.content.assets.length}개)`:(e.contentError||'회의록·원본 동기화 필요')}</p>)}
-        {meeting.epics?.some(e=>e.status==="PUBLISHED"&&!e.external)&&<button disabled={busy||dirty} onClick={()=>run(async()=>{await api(`/meetings/${meeting.id}/epics/sync`,"POST");})}>에픽 회의록·녹음 동기화</button>}
+        {meeting.epics?.some(e=>e.status==="PUBLISHED"&&!e.external)&&<button disabled={busy||dirty} onClick={()=>run(async()=>{await api(`/meetings/${meeting.id}/epics/sync`,"POST");})}>에픽 링크·녹음 동기화</button>}
       </div>
       {real&&projectsLoaded&&current&&!projects.some(p=>p.key===current.projectKey)&&<div className="error" role="alert">초안의 프로젝트 '{current.projectKey}'는 현재 Jira에서 조회되지 않습니다. 티켓은 회의 프로젝트 '{meeting.content.projectKey}'로 저장됩니다. 회의 프로젝트의 Jira 접근 권한을 확인하고 초안을 저장하세요.</div>}
       <div className="ticket-review-workspace">
@@ -1418,6 +1422,7 @@ function TicketReview({
           </div>
         </div>
         <TicketDetailsDrawer open={drawerOpen} onClose={()=>setDrawerOpen(false)} blocked={operationBusy} fallbackFocus={()=>document.querySelector<HTMLElement>(`[data-draft-id="${CSS.escape(focusId)}"] .candidate > button`)}>
+        <div className="ticket-details-workspace"><RelatedTickets meeting={meeting} currentId={focusId} onSelect={focus} disabled={busy}/>
         <div className="panel ticket-editor">
           {edit ? (
             <>
@@ -1595,6 +1600,7 @@ function TicketReview({
           ) : (
             <Empty>편집할 티켓을 선택하세요.</Empty>
           )}
+        </div>
         </div>
         </TicketDetailsDrawer>
       </div>

@@ -5,6 +5,7 @@ import { api } from "./api";
 import AiSettingsCard from "./AiSettingsCard";
 import JiraConnectionGuide from "./JiraConnectionGuide";
 import {SpeechSettingsCard} from './speech';
+import {ConfluenceSettingsCard} from './Confluence';
 import {
   useJiraSettings,
   notifyJiraSettingsChanged,
@@ -506,6 +507,7 @@ export default function JiraSettingsPage() {
             </div>
           )}
         </section>
+        <ConfluenceSettingsCard />
         <SpeechSettingsCard />
         <AiSettingsCard />
         <section className="panel padded full">

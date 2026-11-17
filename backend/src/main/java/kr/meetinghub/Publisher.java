@@ -31,7 +31,7 @@ public class Publisher {
                 String group=epicId.isBlank()?d.meetingId+"|"+d.projectKey:epicId;
                 var epic=outcomes.computeIfAbsent(group,k->epicId.isBlank()?epicPublisher.ensure(d.meetingId,d.projectKey,adapter):epicPublisher.ensureSelected(epicId,d.meetingId,d.projectKey,adapter));
                 if(!epic.status.equals("PUBLISHED"))return new Result(id,"BLOCKED",null,null,"에픽이 먼저 등록되어야 합니다. 에픽 상태: "+epic.status+". "+Objects.toString(epic.error,"잠시 후 등록 결과를 다시 확인하세요."));
-                if(!epic.external&&!"SYNCED".equals(epic.contentStatus))return new Result(id,"BLOCKED",null,null,"에픽 회의록·녹음 첨부를 먼저 완료하세요. "+Objects.toString(epic.contentError,"동기화가 필요합니다."));
+                if(!epic.external&&!"SYNCED".equals(epic.contentStatus))return new Result(id,"BLOCKED",null,null,"에픽 링크·녹음 첨부를 먼저 완료하세요. "+Objects.toString(epic.contentError,"동기화가 필요합니다."));
                 return publish(id,adapter,epic.issueKey);
             }
             return publish(id,adapter);

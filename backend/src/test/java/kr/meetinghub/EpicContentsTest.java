@@ -41,14 +41,14 @@ class EpicContentsTest {
         var asset=new Asset(UUID.randomUUID().toString(),name,"audio/mp4",3,key);service.addAsset(id,asset);return asset;
     }
     Draft task(String id){var d=service.addDraft(id,new DraftInput("TEST","Task","업무","설명","","","",List.of(),"",List.of()));service.approve(List.of(d.id));return d;}
-    @Test void publishesFullMinutesAndAllRecordingsAndReusesAttachments()throws Exception{
+    @Test void publishesConfluenceReferenceAndAllRecordingsAndReusesAttachments()throws Exception{
         String id=meeting();asset(id,"회의 녹음.m4a");asset(id,"다음 녹음.m4a");var draft=task(id);
         assertThat(publisher.publishBatch(List.of(draft.id)).get(0).status()).isEqualTo("PUBLISHED");
-        assertThat(jira.created.get(0).description).contains("개요 내용","요약 내용","논의 내용","결정 내용","미결 내용","후속 내용","참석자");
+        assertThat(jira.created.get(0).description).contains("Confluence","/#/meetings/"+id).doesNotContain("개요 내용","논의 내용");
         assertThat(jira.uploads).hasSize(2);assertThat(epics.findByMeetingId(id).get(0).contentStatus).isEqualTo("SYNCED");
         var minutes=service.get(id).content().minutes;minutes.decisions="수정된 결정";service.saveMinutes(id,minutes);
         contents.sync(epics.findByMeetingId(id).get(0).id,jira);
-        assertThat(jira.description).contains("수정된 결정");assertThat(jira.uploads).hasSize(2);
+        assertThat(jira.description).contains("Confluence","/#/meetings/"+id).doesNotContain("수정된 결정");assertThat(jira.uploads).hasSize(2);
     }
     @Test void attachmentPermissionFailureBlocksTasksAndRetryReusesEpic()throws Exception{
         String id=meeting();asset(id,"원본.m4a");var draft=task(id);jira.denied=true;

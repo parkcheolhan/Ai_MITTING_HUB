@@ -30,8 +30,7 @@ public class EpicPublisher {
             var epic=epics.findById(id).orElseGet(()->{
                 var e=new Epic();e.id=id;e.meetingId=meetingId;e.projectKey=project;e.target=jira.target();
                 e.summary=("[회의] "+meeting.title);if(e.summary.length()>200)e.summary=e.summary.substring(0,200);
-                try{var content=json.readValue(meeting.payload,Content.class);e.description=EpicContents.description(meeting.title,content);}
-                catch(Exception ignored){e.description="회의 업무 묶음: /meetings/"+meetingId;}
+                e.description=contents.reference(meetingId,meeting.title);
                 return e;
             });
             MeetingService.require(epic.meetingId.equals(meetingId)&&epic.projectKey.equals(project)&&epic.target.equals(jira.target()),"에픽의 회의·프로젝트·Jira 대상이 다릅니다.");

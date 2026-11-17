@@ -10,6 +10,7 @@ import kr.meetinghub.Domain.*;
 public class AiJobProcessor {
     final MeetingService service;final Jobs jobs;final TransactionTemplate tx;final Adapters.SpeechToText speech;
     final SchedulingService scheduling;
+    @org.springframework.beans.factory.annotation.Autowired ConfluencePublisher confluence;
     AiJobProcessor(MeetingService service,Jobs jobs,TransactionTemplate tx,Adapters.SpeechToText speech,SchedulingService scheduling){this.service=service;this.jobs=jobs;this.tx=tx;this.speech=speech;this.scheduling=scheduling;}
     record Input(Meeting meeting,Content content,Draft draft,List<Item> selected,boolean hierarchyExists) {}
     static List<String> stages(String type){
@@ -59,7 +60,9 @@ public class AiJobProcessor {
                         input.draft()==null?"":"하위업무를 생성하지 말고 subtasks는 반드시 빈 목록으로 반환하세요. 세부 내용은 작업의 체크리스트에 작성하세요.\n기존 초안 제목: "+input.draft().summary+"\n기존 설명:\n"+input.draft().description);
                     default->throw new IllegalArgumentException("알 수 없는 분석 단계입니다.");
                 };
-                if(persist(id,stage,input,computed,ai,index+1,stages.size()))return;
+                boolean waiting=persist(id,stage,input,computed,ai,index+1,stages.size());
+                if(Set.of("GENERATING_MINUTES","GENERATING_TICKETS").contains(stage)&&jobs.findById(id).map(j->!j.status.equals("CANCELLED")).orElse(false))confluence.autoSync(input.meeting().id);
+                if(waiting)return;
             }
             tx.executeWithoutResult(s->{
                 var j=jobs.locked(id).orElseThrow();if(j.status.equals("CANCELLED"))return;

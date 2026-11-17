@@ -11,10 +11,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kr.meetinghub.Domain.*;
 
-/** Transfers meeting minutes and original media after the Epic key is durable. */
+/** Transfers meeting references and original media; minutes are published to Confluence. */
 @Service
 public class EpicContents {
     final Epics epics;final Meetings meetings;final EpicAttachments attachments;final TransactionTemplate tx;final ObjectMapper json;final Path uploadDir;
+    @Value("${app.public-url:https://parkcheolhan.github.io/Ai_MITTING_HUB}") String publicUrl="https://parkcheolhan.github.io/Ai_MITTING_HUB";
+    String reference(String meetingId,String title){return "회의 업무 묶음: "+title+"\n회의록은 Confluence에서 관리합니다.\n회의록 및 업로드 링크: "+ConfluenceDocument.meetingUrl(publicUrl,meetingId);}
     EpicContents(Epics epics,Meetings meetings,EpicAttachments attachments,TransactionTemplate tx,ObjectMapper json,@Value("${app.upload-dir}") String uploadDir){
         this.epics=epics;this.meetings=meetings;this.attachments=attachments;this.tx=tx;this.json=json;this.uploadDir=Path.of(uploadDir).toAbsolutePath().normalize();
     }
@@ -37,12 +39,12 @@ public class EpicContents {
         try{
             var meeting=meetings.findById(epic.meetingId).orElseThrow(MeetingService::missing);
             var content=json.readValue(meeting.payload,Content.class);
-            String description=description(meeting.title,content);
+            String description=reference(meeting.id,meeting.title);
             jira.updateDescription(epic.issueKey,description);
             for(var asset:content.assets)transfer(epic,asset,jira);
             return tx.execute(s->{var e=epics.locked(id).orElseThrow();e.description=description;e.contentStatus="SYNCED";e.contentError=null;return epics.save(e);});
         }catch(Exception e){
-            String message=e instanceof IllegalArgumentException?e.getMessage():e instanceof CloudJira.Uncertain?"녹음 첨부 결과 확인이 필요합니다. Jira에 반영되면 다시 동기화하여 확인하세요. 확인 전에는 자동 재전송하지 않습니다.":"에픽 회의록·녹음 동기화에 실패했습니다. 서버 파일과 Jira 연결을 확인하세요.";
+            String message=e instanceof IllegalArgumentException?e.getMessage():e instanceof CloudJira.Uncertain?"녹음 첨부 결과 확인이 필요합니다. Jira에 반영되면 다시 동기화하여 확인하세요. 확인 전에는 자동 재전송하지 않습니다.":"에픽 링크·녹음 동기화에 실패했습니다. 서버 파일과 Jira 연결을 확인하세요.";
             return tx.execute(s->{var saved=epics.locked(id).orElseThrow();saved.contentStatus="FAILED";saved.contentError=message;return epics.save(saved);});
         }
     }

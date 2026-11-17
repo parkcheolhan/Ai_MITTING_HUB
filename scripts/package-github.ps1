@@ -4,7 +4,7 @@ $output=Join-Path $taskRoot 'github'
 New-Item -ItemType Directory -Force $output | Out-Null
 $files=@(
   'frontend/package.json','frontend/package-lock.json','frontend/tsconfig.json','frontend/vite.config.ts','frontend/index.html',
-  'frontend/scripts/build-html.mjs','frontend/scripts/test-pages.mjs','frontend/scripts/test-html.mjs','frontend/playwright.config.ts',
+  'frontend/scripts/build-html.mjs','frontend/scripts/test-pages.mjs','frontend/scripts/test-html.mjs','frontend/scripts/test-confluence-pages.mjs','frontend/playwright.config.ts',
   'backend/pom.xml','backend/mvnw','backend/mvnw.cmd','backend/.mvn/wrapper/maven-wrapper.properties',
   'scripts/setup-speech.ps1','scripts/setup-speech.sh','scripts/install-tunnel.ps1','scripts/start-remote.ps1','scripts/stop-remote.ps1','scripts/package-github.ps1','scripts/github-pages.yml',
   'docs/github-local-server.md','docs/transcript-review.md'

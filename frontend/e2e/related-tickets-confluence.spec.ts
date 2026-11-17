@@ -1,0 +1,38 @@
+import {test,expect,type Page} from '@playwright/test';
+
+function fixture(){const draft=(id:string,summary:string,epicId:string)=>({id,meetingId:'linked',projectKey:'TEST',issueType:'Task',summary,description:summary+' 설명',assignee:'',assigneeName:'',priority:'Medium',dueDate:'',startAt:'',endAt:'',scheduleMode:'MANUAL',labels:[],parent:'',parentDraftId:'',epicId,epicKey:'',analysisItemIds:[],status:'DRAFT',version:0});return {id:'linked',title:'Confluence 연결 회의',createdAt:'2026-11-17T00:00:00Z',status:'REVIEW_PENDING',jobs:[],epics:[{id:'alpha',summary:'제품 개선',status:'PENDING',projectKey:'TEST',currentTarget:true},{id:'beta',summary:'운영 개선',status:'PENDING',projectKey:'TEST',currentTarget:true}],drafts:[draft('one','로그인 개선','alpha'),draft('two','접근성 검토','alpha'),draft('three','운영 점검','beta')],content:{occurredAt:'2026-11-17T10:00',projectKey:'TEST',participants:['김민수'],source:'TEXT',template:'일반',segments:[],assets:[],items:[],minutes:{version:1,generationMode:'manual',overview:'회의 개요',summary:'안건',discussion:'논의',decisions:'결정',openQuestions:'없음',followUp:'검토',formatted:''}}};}
+async function routes(page:Page){const meeting=fixture(),state={connection:[] as any[],destinations:[] as any[],publications:0,failUpload:false};let settings={enabled:false,useJiraCredentials:true,siteUrl:'https://unit.atlassian.net',email:'unit@example.com',cloudId:'',tokenConfigured:true,connected:false,configured:false,spaceId:'',spaceName:'',parentPageId:'',parentTitle:'',automatic:true};let publication={configured:false,automatic:true,status:'NOT_PUBLISHED',pageUrl:'',error:'',syncedAt:'',spaceName:'',parentTitle:''};
+  await page.route('**/api/**',route=>{const r=route.request(),path=new URL(r.url()).pathname;let json:any=[];
+    if(path==='/api/meetings/linked')json=meeting;
+    if(path==='/api/settings')json={mode:'mock',configured:true,defaultProject:'TEST'};
+    if(path==='/api/settings/ai')json={mode:'mock',configured:true};
+    if(path==='/api/integrations/jira/projects')json=[{key:'TEST',name:'검증'}];
+    if(path==='/api/ticket-drafts/one'&&r.method()==='PUT'){Object.assign(meeting.drafts[0],r.postDataJSON());meeting.drafts[0].version++;json=meeting.drafts[0];}
+    if(path==='/api/settings/confluence')json=settings;
+    if(path==='/api/settings/confluence/connection'){const input=r.postDataJSON();state.connection.push(input);settings={...settings,...input,connected:input.enabled};delete (settings as any).apiToken;json=settings;}
+    if(path==='/api/integrations/confluence/spaces')json={results:[{id:'1',name:'제품 개발',key:'DEV'}],nextCursor:''};
+    if(path==='/api/integrations/confluence/spaces/1/pages')json={results:[{id:'10',title:'회의록 모음'}],nextCursor:''};
+    if(path==='/api/settings/confluence/destination'){const input=r.postDataJSON();state.destinations.push(input);settings={...settings,...input,configured:true,spaceName:'제품 개발',parentTitle:'회의록 모음'};publication={...publication,configured:true,automatic:input.automatic,spaceName:settings.spaceName,parentTitle:settings.parentTitle};json=settings;}
+    if(path==='/api/meetings/linked/confluence')json=publication;
+    if(path==='/api/meetings/linked/confluence/publish'){state.publications++;publication={...publication,status:state.failUpload?'FAILED':'PUBLISHED',error:state.failUpload?'Confluence 접근 권한을 확인하세요.':'',pageUrl:state.failUpload?'':'https://unit.atlassian.net/wiki/pages/viewpage.action?pageId=101',syncedAt:state.failUpload?'':new Date().toISOString()};json=publication;}
+    return route.fulfill({json});
+  });return {meeting,state};}
+
+test('same Epic list switches details and protects unsaved edits, including direct ticket links',async({page})=>{
+  await routes(page);await page.goto('/meetings/linked/tickets?ticket=one');const dialog=page.getByRole('dialog',{name:'티켓 상세정보',exact:true}),list=dialog.getByRole('complementary',{name:'같은 에픽 업무 목록'});
+  await expect(page.getByLabel('제목',{exact:true})).toHaveValue('로그인 개선');await expect(list.getByRole('button')).toHaveCount(2);await expect(list).not.toContainText('운영 점검');
+  await list.getByRole('button',{name:/접근성 검토/}).click();await expect(page.getByLabel('제목',{exact:true})).toHaveValue('접근성 검토');await expect(list.getByRole('button',{name:/접근성 검토/})).toHaveAttribute('aria-current','true');
+  await list.getByRole('button',{name:/로그인 개선/}).click();await page.getByLabel('제목',{exact:true}).fill('저장 전 로그인');await list.getByRole('button',{name:/접근성 검토/}).click();await expect(page.getByLabel('제목',{exact:true})).toHaveValue('저장 전 로그인');await expect(dialog.locator('.editor-inline-error')).toContainText('먼저 저장');
+  await page.getByRole('button',{name:'변경사항 저장',exact:true}).click();await list.getByLabel('같은 에픽 업무 검색').fill('접근성');await expect(list.getByRole('button')).toHaveCount(1);await list.getByRole('button',{name:/접근성/}).click();await expect(page.getByLabel('제목',{exact:true})).toHaveValue('접근성 검토');
+  await page.screenshot({path:'test-results/related-tickets-desktop.png',animations:'disabled'});await page.setViewportSize({width:390,height:844});await expect(list).toBeInViewport();expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);await page.screenshot({path:'test-results/related-tickets-mobile.png',animations:'disabled'});
+});
+
+test('configures Confluence destination, uploads minutes, reports failures and links the resulting page',async({page})=>{
+  const {state}=await routes(page);await page.goto('/meetings/linked?tab=minutes');const widget=page.getByRole('region',{name:'Confluence 회의록 업로드'});await expect(widget.getByRole('button',{name:'Confluence에 업로드',exact:true})).toBeDisabled();await widget.getByRole('link',{name:'회의록 설정',exact:true}).click();
+  const card=page.locator('#minutes-settings');await expect(card).toBeInViewport();await card.getByLabel('Confluence 회의록 업로드 사용').check();await card.getByRole('button',{name:'연결 설정 저장',exact:true}).click();await expect(card.getByLabel('스페이스',{exact:true})).toBeEnabled();await card.getByLabel('스페이스',{exact:true}).selectOption('1');
+  await card.getByRole('button',{name:'페이지 조회',exact:true}).click();await card.getByLabel('조회된 상위 페이지',{exact:true}).selectOption('10');await card.getByLabel('회의록 저장·생성 및 Jira 티켓 등록 후 자동 동기화').uncheck();await card.getByRole('button',{name:'업로드 위치 저장',exact:true}).click();await expect(card.getByRole('status')).toContainText('업로드 위치를 저장했습니다');expect(state.destinations).toEqual([{spaceId:'1',parentPageId:'10',automatic:false}]);expect(state.connection[0].useJiraCredentials).toBe(true);
+  await page.screenshot({path:'test-results/confluence-settings.png',animations:'disabled'});await page.goto('/meetings/linked?tab=minutes');await expect(widget).toContainText('제품 개발 / 회의록 모음 · 수동 업로드');
+  state.failUpload=true;await widget.getByRole('button',{name:'Confluence에 업로드',exact:true}).click();await expect(widget.getByRole('alert')).toContainText('접근 권한');await expect(page.locator('.minutes-document')).toContainText('논의');
+  state.failUpload=false;await widget.getByRole('button',{name:'Confluence에 업로드',exact:true}).click();await expect(widget.getByRole('link',{name:'Confluence에서 보기',exact:true})).toHaveAttribute('href','https://unit.atlassian.net/wiki/pages/viewpage.action?pageId=101');await expect(widget).toContainText('업로드 완료');await widget.getByRole('button',{name:'Confluence 동기화',exact:true}).click();expect(state.publications).toBe(3);await expect(widget.getByRole('alert')).toHaveCount(0);
+  await expect(widget.getByRole('button',{name:'Confluence 동기화',exact:true})).toBeEnabled();await widget.scrollIntoViewIfNeeded();await page.screenshot({path:'test-results/confluence-minutes.png',animations:'disabled'});
+});

@@ -9,10 +9,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Component
 public class StartupRecovery implements ApplicationRunner {
     final MeetingService service;final TransactionTemplate tx;final LegacyExampleCleanup cleanup;final FlatTickets flatTickets;
+    @org.springframework.beans.factory.annotation.Autowired ConfluencePublications confluence;
     StartupRecovery(MeetingService service,TransactionTemplate tx,LegacyExampleCleanup cleanup,FlatTickets flatTickets){this.service=service;this.tx=tx;this.cleanup=cleanup;this.flatTickets=flatTickets;}
     public void run(ApplicationArguments args){
         cleanup.run();
         tx.executeWithoutResult(s->{
+            confluence.findAll().stream().filter(p->p.status.equals("PUBLISHING")).forEach(p->{p.status="UNKNOWN";p.error="서버 재시작 전 Confluence 업로드 결과를 확인한 뒤 다시 동기화하세요.";confluence.save(p);});
             service.epics().findAll().stream().filter(e->e.status.equals("PUBLISHING")).forEach(e->{e.status="UNKNOWN";e.error="서버 재시작 전 에픽 등록 결과를 확인하세요. 자동 재생성하지 않습니다.";service.epics().save(e);});
             service.drafts().findAll().stream().filter(d->d.status.equals("PUBLISHING")).forEach(d->{
                 d.status="UNKNOWN";d.error="서버 재시작 전 등록 결과를 Jira에서 확인하세요. 자동 재생성하지 않습니다.";service.drafts().save(d);

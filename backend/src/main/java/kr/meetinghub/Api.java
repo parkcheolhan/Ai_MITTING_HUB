@@ -23,6 +23,7 @@ public class Api {
     @GetMapping("/meetings/{id}") public MeetingView get(@PathVariable String id) { return service.get(id); }
     @org.springframework.beans.factory.annotation.Autowired EpicBoard epicBoard;
     @org.springframework.beans.factory.annotation.Autowired FlatTickets flatTickets;
+    @org.springframework.beans.factory.annotation.Autowired ConfluencePublisher confluence;
     @PostMapping("/meetings/{id}/epics") public MeetingView addEpic(@PathVariable String id,@Valid @RequestBody AddEpic input){return epicBoard.add(id,input);}
     @PutMapping("/ticket-drafts/{id}/epic") public List<Draft> moveEpic(@PathVariable String id,@Valid @RequestBody MoveEpic input){return epicBoard.move(id,input);}
     @PostMapping("/meetings/{id}/epics/sync") public List<EpicView> syncEpics(@PathVariable String id){
@@ -68,8 +69,8 @@ public class Api {
     @PostMapping("/meetings/{id}/speakers/analyze") public Job speakers(@PathVariable String id){return worker.start(id,"SPEAKERS");}
     @PutMapping("/meetings/{id}/participants") public MeetingView participants(@PathVariable String id,@Valid @RequestBody ParticipantsInput input){return service.setParticipants(id,input);}
     @PostMapping("/meetings/{id}/minutes/generate") public Job minutes(@PathVariable String id) { return worker.start(id,"MINUTES"); }
-    @PutMapping("/meetings/{id}/minutes/template") public MeetingView template(@PathVariable String id,@Valid @RequestBody MinutesTemplateInput input){return service.setMinutesTemplate(id,input);}
-    @PutMapping("/meetings/{id}/minutes") public Minutes saveMinutes(@PathVariable String id,@RequestBody Minutes minutes) { return service.saveMinutes(id,minutes); }
+    @PutMapping("/meetings/{id}/minutes/template") public MeetingView template(@PathVariable String id,@Valid @RequestBody MinutesTemplateInput input){var result=service.setMinutesTemplate(id,input);confluence.autoSync(id);return result;}
+    @PutMapping("/meetings/{id}/minutes") public Minutes saveMinutes(@PathVariable String id,@RequestBody Minutes minutes) {var result=service.saveMinutes(id,minutes);confluence.autoSync(id);return result;}
     @PostMapping("/meetings/{id}/analyze") public Job analyze(@PathVariable String id) { return worker.start(id,"ANALYZE"); }
     @PostMapping("/meetings/{id}/schedule") @ResponseStatus(HttpStatus.ACCEPTED) public Job schedule(@PathVariable String id,@Valid @RequestBody ScheduleRequest input){return worker.schedule(id,input);}
     @GetMapping("/meetings/{id}/items") public List<Item> items(@PathVariable String id) { return service.get(id).content().items; }
@@ -85,7 +86,9 @@ public class Api {
     @PostMapping("/ticket-drafts/merge") public List<Draft> merge(@Valid @RequestBody Ids ids) { return service.merge(ids.ids()); }
     @PostMapping("/ticket-drafts/{id}/split") public List<Draft> split(@PathVariable String id) { return service.split(id); }
     @PostMapping("/ticket-drafts/publish") public List<Result> publish(@Valid @RequestBody Ids ids) {
-        return publisher.publishBatch(ids.ids());
+        var result=publisher.publishBatch(ids.ids());
+        ids.ids().stream().map(id->service.drafts().findById(id).map(d->d.meetingId).orElse("")).filter(id->!id.isBlank()).distinct().forEach(confluence::autoSync);
+        return result;
     }
     @GetMapping("/meetings/{id}/jira-results") public List<Draft> results(@PathVariable String id) { return service.get(id).drafts(); }
     @GetMapping("/jobs/{id}") public Job job(@PathVariable String id) { return service.jobs().findById(id).orElseThrow(MeetingService::missing); }
