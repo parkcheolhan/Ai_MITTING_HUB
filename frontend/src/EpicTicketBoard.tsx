@@ -80,7 +80,7 @@ export default function EpicTicketBoard({meeting,roots,renderRoot,disabled,onBus
     if(!canMove(draft)||assignedEpicId(draft,epics)===epicId)return;
     await perform(async()=>{
       await api(`/ticket-drafts/${draft.id}/epic`,'PUT',{epicId,version});
-      setNotice(`${draft.summary} 업무를 ${epics.find(e=>e.id===epicId)?.summary||'미배치 목록'}${epicId?' 에픽으로':'으로'} 이동했습니다. 다시 승인한 뒤 등록하세요.`);
+      setNotice('');
     });
   }
   function start(e:DragEvent,draft:Draft){

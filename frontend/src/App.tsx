@@ -1290,7 +1290,7 @@ function TicketReview({
       {dirty&&!drawerOpen&&<div className="ticket-pending-edit" role="status"><span>‘{edit?.summary}’에 저장하지 않은 변경사항이 있습니다.</span><div className="actions"><button type="button" onClick={()=>setDrawerOpen(true)}>편집 계속</button><button type="button" onClick={cancelCurrentEdit}>변경 취소</button></div></div>}
       <div className="notice epic-summary">
         <strong>에픽을 추가하고 업무 티켓을 배치하세요</strong>
-        <p>‘에픽 조회·추가’에서 기존 에픽이나 새 에픽 박스를 추가하고 업무를 배치하세요. 이동 후 다시 승인하면 배치한 에픽 아래에 등록됩니다. 업무를 우클릭하면 삭제 메뉴가 열립니다.</p>
+        <p>‘에픽 조회·추가’에서 기존 에픽이나 새 에픽 박스를 추가하고 업무를 배치하세요. 에픽으로 이동한 업무는 자동 승인되며 등록 버튼을 누르면 배치한 에픽 아래에 등록됩니다. 업무를 우클릭하면 삭제 메뉴가 열립니다.</p>
         {unplacedSelection&&<p className="warning" role="status">선택한 업무를 에픽 박스에 배치한 뒤 등록하세요.</p>}
         {meeting.epics?.filter(e=>e.status==="PUBLISHED"&&!e.external).map(e=><p key={e.id} className={e.contentError?'warning':'help'}>{e.issueKey} · {e.contentStatus==="SYNCED"?`회의록·원본 동기화 완료 (등록 원본 ${meeting.content.assets.length}개)`:(e.contentError||'회의록·원본 동기화 필요')}</p>)}
         {meeting.epics?.some(e=>e.status==="PUBLISHED"&&!e.external)&&<button disabled={busy||dirty} onClick={()=>run(async()=>{await api(`/meetings/${meeting.id}/epics/sync`,"POST");})}>에픽 링크·녹음 동기화</button>}

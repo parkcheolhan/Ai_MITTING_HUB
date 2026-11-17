@@ -47,7 +47,14 @@ public class EpicBoard {
                 MeetingService.require(Set.of("PENDING","FAILED","PUBLISHED").contains(epic.status),"에픽의 등록 결과를 확인한 뒤 이동하세요.");key=Objects.toString(epic.issueKey,"");
             }
             MeetingService.require(group.stream().allMatch(d->d.projectKey.equals(root.projectKey)),"업무와 하위업무의 프로젝트를 확인하세요.");
-            for(var d:group){d.epicId=id;d.epicKey=key;d.parent=d.id.equals(root.id)?key:"";d.status="DRAFT";d.approvedTarget=null;d.publishTarget=null;d.error=null;service.drafts().save(d);}
+            if(!id.isBlank())MeetingService.require(group.stream().allMatch(d->!d.summary.isBlank()&&!d.description.isBlank()),"제목과 설명이 필요합니다.");
+            // Placing a task in an Epic also approves its content for this Jira target.
+            // Publication still checks schedule readiness and never runs as part of moving.
+            for(var d:group){
+                d.epicId=id;d.epicKey=key;d.parent=d.id.equals(root.id)?key:"";d.status=id.isBlank()?"DRAFT":"APPROVED";
+                d.approvedTarget=id.isBlank()?null:target;d.publishTarget=null;d.error=null;service.drafts().save(d);
+                if(!id.isBlank())service.audits().save(new Audit("DRAFT_APPROVED",d.id));
+            }
             c.epicBoardEnabled=true;service.save(m,c);service.audits().save(new Audit("DRAFT_EPIC_MOVED",root.id));
             service.drafts().flush();return group;
         });

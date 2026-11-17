@@ -8,6 +8,7 @@ function fixture(){
 test('finds epics, opens boxes, drags independent tasks and persists mobile reassignment',async({page})=>{
   await page.setViewportSize({width:1440,height:1400});
   const meeting=fixture();const moves:any[]=[];let searchCount=0,reject=false;
+  meeting.drafts[0].status='DRAFT';
   await page.route('**/api/**',route=>{
     const request=route.request(),url=new URL(request.url()),path=url.pathname;
     let json:any=[];
@@ -26,7 +27,7 @@ test('finds epics, opens boxes, drags independent tasks and persists mobile reas
     if(path==='/api/ticket-drafts/root/epic'){
       if(reject)return route.fulfill({status:409,json:{message:'티켓이 변경되었습니다. 다시 이동하세요.'}});
       const input=request.postDataJSON();moves.push(input);
-      for(const d of meeting.drafts.filter(d=>d.id==='root')){d.epicId=input.epicId;d.status='DRAFT';d.version++;}
+      for(const d of meeting.drafts.filter(d=>d.id==='root')){d.epicId=input.epicId;d.status=input.epicId?'APPROVED':'DRAFT';d.version++;}
       json=meeting.drafts;
     }
     return route.fulfill({json});
@@ -42,6 +43,10 @@ test('finds epics, opens boxes, drags independent tasks and persists mobile reas
   await page.getByLabel('로그인 개선 이동 핸들',{exact:true}).dragTo(existing.locator('.epic-box-heading'));
   await expect(existing.locator('[data-draft-id="root"]')).toHaveCount(1);await expect(unassigned.locator('[data-draft-id]')).toHaveCount(2);
   expect(moves[0]).toEqual({epicId:'existing',version:0});expect(meeting.drafts[1].parentDraftId).toBe('');expect(meeting.drafts[1].epicId).toBe('');
+  await expect(existing.locator('[data-draft-id="root"] .badge')).toHaveText('승인됨');
+  await expect(page.getByText(/이동했습니다\. 다시 승인한 뒤 등록하세요/)).toHaveCount(0);
+  await page.locator('.candidate-toolbar').first().getByRole('checkbox').uncheck();await page.getByLabel('로그인 개선 선택',{exact:true}).check();
+  await expect(page.getByRole('button',{name:'승인 티켓 Mock 등록'})).toBeEnabled();
   await expect(page.locator('.subtask-candidate,.subtask-list')).toHaveCount(0);
   await page.getByRole('button',{name:'에픽 조회·추가',exact:true}).click();await page.getByLabel('새 에픽 제목').fill('분리된 새 에픽');await page.getByRole('button',{name:'새 에픽 박스 추가',exact:true}).click();
   const created=page.getByRole('region',{name:'분리된 새 에픽 에픽 박스',exact:true});await expect(created).toBeVisible();await expect(created).toContainText('등록 전 에픽');
@@ -53,6 +58,7 @@ test('finds epics, opens boxes, drags independent tasks and persists mobile reas
   reject=true;await page.getByLabel('로그인 개선 에픽 이동').selectOption('existing');await expect(page.getByRole('alert')).toContainText('티켓이 변경되었습니다');
   await expect(created.locator('[data-draft-id="root"]')).toHaveCount(1);await expect(page.getByLabel('로그인 개선 에픽 이동')).toHaveValue('new');
   reject=false;await page.getByLabel('로그인 개선 에픽 이동').selectOption('');await expect(unassigned.locator('[data-draft-id="root"]')).toHaveCount(1);
+  await expect(unassigned.locator('[data-draft-id="root"] .badge')).toHaveText('초안');
 });
 
 test('locks registered groups and prevents moves with unsaved ticket edits',async({page})=>{

@@ -35,10 +35,10 @@ class EpicBoardTest {
     @Test void movesTaskAndChildrenAtomicallyAndPublishesUnderTheChosenEpic(){
         String m=meeting();var root=task(m,"상위업무","");var child=task(m,"하위업무",root.id);String first=add(m,"첫 에픽"),second=add(m,"두 번째 에픽");
         service.approve(List.of(root.id,child.id));long old=fresh(root).version;
-        var moved=board.move(root.id,new MoveEpic(first,old));assertThat(moved).hasSize(2).allSatisfy(d->{assertThat(d.epicId).isEqualTo(first);assertThat(d.status).isEqualTo("DRAFT");assertThat(d.approvedTarget).isNull();});
+        var moved=board.move(root.id,new MoveEpic(first,old));assertThat(moved).hasSize(2).allSatisfy(d->{assertThat(d.epicId).isEqualTo(first);assertThat(d.status).isEqualTo("APPROVED");assertThat(d.approvedTarget).isEqualTo(jira.target());});
         assertThat(fresh(child).parentDraftId).isEqualTo(root.id);assertThat(jira.calls).isEmpty();
         assertThatThrownBy(()->board.move(root.id,new MoveEpic(second,old))).hasMessageContaining("변경되었습니다");assertThat(fresh(root).epicId).isEqualTo(first);
-        board.move(root.id,new MoveEpic(second,fresh(root).version));service.approve(List.of(root.id,child.id));
+        board.move(root.id,new MoveEpic(second,fresh(root).version));
         assertThat(publisher.publishBatch(List.of(child.id,root.id))).allMatch(r->r.status().equals("PUBLISHED"));
         assertThat(jira.calls).extracting(d->d.issueType).containsExactly("Epic","Task","Sub-task");assertThat(jira.calls.get(0).summary).isEqualTo("두 번째 에픽");
         assertThat(fresh(root).parent).isEqualTo("TEST-1");assertThat(fresh(child).parent).isEqualTo("TEST-2");assertThat(fresh(child).epicKey).isEqualTo("TEST-1");
@@ -48,7 +48,7 @@ class EpicBoardTest {
         String m=meeting();var root=task(m,"연결할 업무","");
         var selected=board.add(m,new AddEpic("TEST-100",null));String epic=selected.epics().get(0).id();
         assertThat(board.add(m,new AddEpic("TEST-100",null)).epics()).hasSize(1);
-        board.move(root.id,new MoveEpic(epic,fresh(root).version));service.approve(List.of(root.id));
+        board.move(root.id,new MoveEpic(epic,fresh(root).version));
         assertThat(publisher.publishBatch(List.of(root.id)).get(0).status()).isEqualTo("PUBLISHED");
         assertThat(jira.calls).extracting(d->d.issueType).containsExactly("Task");assertThat(fresh(root).parent).isEqualTo("TEST-100");assertThat(jira.descriptionUpdates).isZero();
         publisher.epicPublisher.contents.sync(epic,jira);assertThat(jira.descriptionUpdates).isZero();
@@ -66,10 +66,11 @@ class EpicBoardTest {
         assertThat(publisher.publishBatch(List.of(root.id)).get(0).status()).isEqualTo("BLOCKED");assertThat(jira.calls).isEmpty();
         board.move(root.id,new MoveEpic(epic,fresh(root).version));board.move(root.id,new MoveEpic("",fresh(root).version));
         assertThat(fresh(root).epicId).isEmpty();assertThat(fresh(root).parent).isEmpty();assertThat(fresh(root).status).isEqualTo("DRAFT");
+        assertThat(fresh(root).approvedTarget).isNull();
     }
     @Test void differentEpicBoxesInTheSameBatchUseDifferentParents(){
         String m=meeting();var a=task(m,"업무 A","");var b=task(m,"업무 B","");String x=add(m,"에픽 A"),y=add(m,"에픽 B");
-        board.move(a.id,new MoveEpic(x,fresh(a).version));board.move(b.id,new MoveEpic(y,fresh(b).version));service.approve(List.of(a.id,b.id));
+        board.move(a.id,new MoveEpic(x,fresh(a).version));board.move(b.id,new MoveEpic(y,fresh(b).version));
         assertThat(publisher.publishBatch(List.of(a.id,b.id))).allMatch(r->r.status().equals("PUBLISHED"));assertThat(fresh(a).parent).isNotEqualTo(fresh(b).parent);
         assertThat(jira.calls).extracting(d->d.issueType).containsExactly("Epic","Task","Epic","Task");
     }
@@ -80,7 +81,14 @@ class EpicBoardTest {
             .andExpect(status().isOk()).andExpect(jsonPath("$.epics[0].external").value(true)).andReturn().getResponse().getContentAsString();
         String epic=json.readTree(body).path("epics").get(0).path("id").asText();
         mvc.perform(put("/api/ticket-drafts/"+d.id+"/epic").contentType("application/json").content(json.writeValueAsString(Map.of("epicId",epic,"version",fresh(d).version))))
-            .andExpect(status().isOk()).andExpect(jsonPath("$[0].epicId").value(epic)).andExpect(jsonPath("$[0].status").value("DRAFT"));
+            .andExpect(status().isOk()).andExpect(jsonPath("$[0].epicId").value(epic)).andExpect(jsonPath("$[0].status").value("APPROVED")).andExpect(jsonPath("$[0].approvedTarget").value(jira.target()));
         assertThat(jira.calls).isEmpty();
+    }
+    @Test void moveApprovesFailedDraftForCurrentTargetAndRegistrationStillChecksSchedule(){
+        String m=meeting();var root=task(m,"일정 미완료 업무","");String epic=add(m,"배치 대상");
+        var saved=service.drafts().findById(root.id).orElseThrow();saved.status="FAILED";saved.approvedTarget="previous-target";saved.publishTarget="previous-target";saved.error="이전 오류";saved.scheduleMode="AI";service.drafts().saveAndFlush(saved);
+        board.move(root.id,new MoveEpic(epic,fresh(root).version));
+        var moved=fresh(root);assertThat(moved.status).isEqualTo("APPROVED");assertThat(moved.approvedTarget).isEqualTo(jira.target());assertThat(moved.publishTarget).isNull();assertThat(moved.error).isNull();assertThat(jira.calls).isEmpty();
+        assertThat(publisher.publishBatch(List.of(root.id)).get(0).status()).isEqualTo("BLOCKED");assertThat(jira.calls).noneMatch(d->d.issueType.equals("Task"));
     }
 }
