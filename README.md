@@ -43,6 +43,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-remote.ps1 -
 
 Pages 주소를 열고 API 서버 HTTPS 주소에는 `.local-remote/connection.json`의 `apiUrl`을, 접속 토큰에는 `.local-remote/access-token.txt` 내용을 입력합니다. 토큰은 해당 탭의 sessionStorage에만 보관하며 URL·GitHub 소스·API 쿼리에는 넣지 않습니다. 접속 토큰을 가진 사람은 이 서버의 회의·AI·Jira 설정에 접근하는 공유 관리자입니다. 사람별 계정 시스템은 아닙니다.
 
+서버 연결 확인 중 네트워크 오류·시간 초과·일시적인 터널 오류가 발생하면 최대 4회 확인하며 **연결 취소**로 중단할 수 있습니다. 토큰 오류·허용 출처 오류는 재시도하지 않고 원인을 표시합니다. 연결 검증에 성공한 설정만 해당 탭에 저장합니다.
+
 연결 후 설정에서 AI·Jira 연결 상태를 확인하고 필요한 인증 정보를 저장합니다. 기존 로컬 DB의 설정은 그대로 사용합니다. AI 호출은 사용자의 계정/API 사용량을 사용하며 실제 Jira 등록은 기존 검토·승인 흐름으로 실행됩니다. 코드 배포가 실제 AI/Jira 연결 성공을 보장하지는 않습니다.
 
 음성·영상 재생은 Authorization 헤더로 파일을 받아 메모리의 Blob URL로 재생합니다. 토큰이 링크·URL에 노출되지 않지만 큰 파일은 다운로드 후 재생 준비에 시간이 걸리며 브라우저 메모리를 사용합니다. Cloudflare 등 터널 사업자의 업로드 한도는 앱의 100MB 한도보다 낮게 적용될 수 있습니다. 100MB에 가까운 파일은 분할하거나 로컬에서 업로드하세요.
