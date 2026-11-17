@@ -1128,17 +1128,13 @@ function TicketReview({
   const [savingField,setSavingField]=useState("");
   const [assigneeMessage,setAssigneeMessage]=useState("");
   const ticketEditor=useRef<HTMLDivElement>(null);
+  const candidatePanel=useRef<HTMLDivElement>(null);
   const approvalToolbar=useRef<HTMLDivElement>(null);
-  const lastEditorId=useRef<string|undefined>(undefined);
   useEffect(()=>{
     const toolbar=approvalToolbar.current,workspace=toolbar?.parentElement;if(!toolbar||!workspace)return;
     const measure=()=>workspace.style.setProperty('--review-toolbar-height',`${Math.ceil(toolbar.getBoundingClientRect().height)}px`);
     measure();const observer=new ResizeObserver(measure);observer.observe(toolbar);return()=>observer.disconnect();
   },[]);
-  useEffect(()=>{
-    const previous=lastEditorId.current;lastEditorId.current=edit?.id;
-    if(previous&&edit?.id&&previous!==edit.id){const frame=requestAnimationFrame(()=>ticketEditor.current?.scrollIntoView({block:'start',behavior:'instant'}));return()=>cancelAnimationFrame(frame);}
-  },[edit?.id]);
   useEffect(()=>{
     const editor=ticketEditor.current,header=editor?.querySelector<HTMLElement>('.ticket-editor-header'),content=editor?.querySelector<HTMLElement>('.ticket-editor-body');if(!editor||!header||!content)return;
     let frame=0;
@@ -1239,6 +1235,7 @@ function TicketReview({
       return;
     }
     setFocusId(id);
+    requestAnimationFrame(()=>ticketEditor.current?.scrollIntoView({block:'start',behavior:'instant'}));
   }
   function change(key: string, value: unknown) {
     setEdit((e) => (e ? { ...e, [key]: value } : null));
@@ -1377,7 +1374,7 @@ function TicketReview({
       </div>
       <div className="review-grid">
         {busy&&assigneeMessage&&<p className="help full" role="status">{assigneeMessage}</p>}
-        <div className="panel candidate-panel">
+        <div ref={candidatePanel} className="panel candidate-panel">
           <div className="candidate-toolbar">
             <label>
               <input
@@ -1437,6 +1434,7 @@ function TicketReview({
               <div className="ticket-editor-header"><div className="editor-title">
                 <h2>티켓 상세 편집</h2>
                 <Badge status={edit.status} />
+                <button type="button" className="back-to-board" onClick={()=>candidatePanel.current?.scrollIntoView({block:'start',behavior:'instant'})}>배치 보드로</button>
               </div>
               {(dirty||projectCorrection)&&<div className="editor-save-strip"><span>저장하지 않은 변경사항이 있습니다.</span><div className="actions"><button type="button" disabled={busy} onClick={cancelCurrentEdit}>편집 취소</button><button type="button" className="primary" disabled={busy||editLocked} onClick={()=>void saveCurrentDraft()}>변경사항 저장</button></div></div>}
               {!!savingField&&<p className="editor-assignee-status" role="status">{savingField} 저장 중…</p>}

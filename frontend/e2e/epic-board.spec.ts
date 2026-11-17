@@ -39,7 +39,7 @@ test('finds epics, opens boxes, drags independent tasks and persists mobile reas
   await page.getByRole('button',{name:'에픽 조회·추가',exact:true}).click();await page.getByLabel('에픽 제목 또는 키').fill('서비스');await page.getByRole('button',{name:'에픽 조회',exact:true}).click();
   await expect(page.getByLabel('에픽 조회 결과')).toContainText('TEST-100');await page.getByRole('button',{name:'박스 추가',exact:true}).click();
   const existing=page.getByRole('region',{name:'서비스 개선 에픽 에픽 박스',exact:true});await expect(existing).toBeVisible();expect(moves).toHaveLength(0);expect(searchCount).toBe(1);
-  await page.getByLabel('로그인 개선 이동 핸들',{exact:true}).dragTo(existing);
+  await page.getByLabel('로그인 개선 이동 핸들',{exact:true}).dragTo(existing.locator('.epic-box-heading'));
   await expect(existing.locator('[data-draft-id="root"]')).toHaveCount(1);await expect(unassigned.locator('[data-draft-id]')).toHaveCount(2);
   expect(moves[0]).toEqual({epicId:'existing',version:0});expect(meeting.drafts[1].parentDraftId).toBe('');expect(meeting.drafts[1].epicId).toBe('');
   await expect(page.locator('.subtask-candidate,.subtask-list')).toHaveCount(0);

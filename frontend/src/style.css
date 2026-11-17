@@ -2382,6 +2382,25 @@ main:has(.ticket-review) > footer { display: none; }
 .ticket-editor textarea.auto-size-textarea { overflow: hidden; resize: none; max-height: none; min-height: 180px; }
 @media(max-width:850px) { .ticket-review-workspace > .review-grid { grid-template-rows: auto auto; } .ticket-review-workspace .review-grid > .candidate-panel { position: relative; top: auto; max-height: 320px; } }
 @media(max-width:850px) { .ticket-review-workspace .review-grid > .candidate-panel:has(.epic-ticket-board) { max-height:min(720px,calc(100dvh - 60px)); } }
+.ticket-review-workspace > .review-grid { grid-template-columns:minmax(0,1fr); }
+.ticket-review-workspace .review-grid > .candidate-panel:has(.epic-ticket-board) { position:relative; top:auto; max-height:none; min-width:0; scroll-margin-top:calc(var(--review-toolbar-height) + 26px); }
+.candidate-panel:has(.epic-ticket-board) > .candidate-scroll { overflow:visible; scrollbar-gutter:auto; }
+.epic-ticket-board .epic-board-toolbar { position:static; padding:0 0 4px; }
+.epic-board-controls { display:flex; align-items:center; gap:7px; }
+.epic-board-lanes { display:grid; grid-auto-flow:column; grid-auto-columns:clamp(270px,calc((100% - 32px)/3),360px); gap:16px; overflow-x:auto; padding:3px 3px 14px; align-items:stretch; min-width:0; position:relative; overscroll-behavior-x:contain; scrollbar-color:#9bb8a6 #edf3ef; scrollbar-width:auto; }
+.epic-board-lanes .epic-drop-box { display:flex; flex-direction:column; height:clamp(420px,65dvh,680px); min-height:0; margin:0; padding:0; overflow:hidden; }
+.epic-board-lanes .epic-box-heading { flex-shrink:0; height:128px; min-height:128px; margin:0; padding:18px 16px; border-bottom:1px solid #d5e2d9; }
+.epic-board-lanes .epic-box-heading > div { min-width:0; }
+.epic-board-lanes .epic-box-heading h3 { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.epic-board-lanes .epic-box-heading p { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.epic-box-heading h3 { line-height:1.45; }
+.epic-column-body { min-height:0; flex:1; overflow-y:auto; padding:0 12px 14px; overscroll-behavior-y:contain; scrollbar-gutter:stable; }
+.epic-column-body .epic-task-group { margin-top:12px; }
+.epic-column-body .candidate { padding:14px 10px; }
+.epic-column-body .epic-drop-placeholder { display:flex; align-items:center; justify-content:center; min-height:140px; }
+.epic-board-lanes .epic-drop-box.drag-over { background:#dff1e6; box-shadow:inset 0 0 0 2px #23815b; }
+.ticket-editor-header .back-to-board { margin-left:auto; font-size:12px; }
+@media(max-width:650px) { .epic-board-lanes { grid-auto-columns:minmax(250px,82vw); gap:12px; } .epic-board-lanes .epic-drop-box { height:clamp(380px,65dvh,600px); } .epic-board-toolbar { flex-wrap:wrap; } .epic-board-controls { margin-left:auto; } }
 .transcript-reader { margin: 24px 0; border: 1px solid #dbe5df; border-radius: 12px; overflow: hidden; }
 .transcript-reader-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 20px 24px; background: #f7faf8; }
 .transcript-reader-toolbar h3 { margin: 0 0 6px; }
