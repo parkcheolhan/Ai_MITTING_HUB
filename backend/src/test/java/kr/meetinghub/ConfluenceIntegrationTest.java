@@ -89,4 +89,9 @@ class ConfluenceIntegrationTest {
     @Test void jiraCredentialsAreResolvedOnlyOnServerAndSiteChangeInvalidatesDestination(){
         jira.save(new JiraSettingsStore.Input("cloud","https://jira.atlassian.net","jira@example.com","fake-jira-token",""));settings.save(new ConfluenceSettings.Connection(true,true,"","","",""));assertThat(settings.current().credentials().apiToken()).isEqualTo("fake-jira-token");assertThat(settings.current().configured()).isFalse();assertThat(json.valueToTree(settings.view()).toString()).doesNotContain("fake-jira-token");
     }
+    @Test void inlineMinutesSaveRefreshesTheExistingConfluenceDocument()throws Exception{
+        String id=meeting();publisher.publish(id);var minutes=meetings.get(id).content().minutes;
+        mvc.perform(patch("/api/meetings/"+id+"/minutes/line").contentType("application/json").content(json.writeValueAsString(new MinutesLineInput("decisions",0,minutes.decisions,"문서에서 바로 수정한 결정",minutes.version)))).andExpect(status().isOk());
+        assertThat(client.creates).isEqualTo(1);assertThat(client.updates).isEqualTo(1);assertThat(client.lastHtml).contains("문서에서 바로 수정한 결정");
+    }
 }

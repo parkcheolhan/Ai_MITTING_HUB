@@ -2249,6 +2249,23 @@ nav a:hover {
 .document-body p { line-height: 1.95; margin: 7px 0; white-space: pre-wrap; }
 .document-list-item { padding-left: 16px; }
 .document-spacer { height: 10px; }
+.minutes-inline-help { font-size:13px; color:#64776b; margin:16px 0; }
+.minutes-inline-status { font-size:12px; color:#196f4d; }
+.minutes-document-line { position:relative; border-radius:5px; min-width:0; }
+.minutes-document-line.editable { cursor:text; outline-offset:3px; }
+.minutes-document-line.editable:hover,.minutes-document-line.editable:focus-visible { background:#eef6f0; outline:1px dashed #8db5a0; }
+.minutes-document-line.empty { min-height:28px; }
+.minutes-empty-line { color:#87958c; font-size:13px; position:absolute; top:2px; left:0; }
+.minutes-document-line.template-gap { min-height:14px; }
+.template-gap .minutes-empty-line { opacity:0; }
+.template-gap:hover .minutes-empty-line,.template-gap:focus-visible .minutes-empty-line { opacity:1; }
+.minutes-line-editor { padding:10px; margin:7px -11px; border:1px solid #388c65; border-radius:7px; background:#f6faf7; }
+.minutes-line-editor textarea { display:block; width:100%; max-width:100%; min-height:44px; padding:8px; margin:0; font-family:inherit; font-size:inherit; line-height:1.95; resize:none; overflow-y:hidden; white-space:pre-wrap; }
+.minutes-line-tools { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-top:8px; color:#52715e; font-size:12px; }
+.minutes-line-tools > div { display:flex; gap:6px; }
+.minutes-line-tools button,.minutes-line-error button { min-height:30px; padding:5px 9px; font-size:12px; }
+.minutes-line-error { display:flex; align-items:center; flex-wrap:wrap; gap:10px; color:#a33c34; font-size:13px; margin-top:10px; }
+.minutes-line-error span { flex:1; min-width:150px; }
 .minutes-document > footer { display: block; margin: 40px 0 0; padding: 20px 0 0; border-top: 1px solid #dce4df; color: #66766e; font-size: 11px; }
 @media(max-width: 600px) { .minutes-document { padding: 26px 20px; } .document-heading h1 { font-size: 23px; } .job-steps { padding: 12px; } }
 .meeting-search-toolbar { justify-content: flex-start; flex-wrap: wrap; }

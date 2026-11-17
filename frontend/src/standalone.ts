@@ -101,6 +101,14 @@ export async function localApi<T>(path: string, method: string, body?: unknown):
       }
       save(data);result=m;
     }
+    else if(action==='minutes'&&subaction==='line'&&method==='PATCH'){
+      const minutes=m.content.minutes,field=input.field as keyof Minutes;
+      if(!minutes||!['formatted','overview','summary','discussion','decisions','openQuestions','followUp'].includes(field))throw new Error('수정할 회의록 항목을 확인하세요.');
+      const lines=String(minutes[field]||'').split(/\r?\n/);
+      if(minutes.version!==input.expectedVersion||lines[input.lineIndex]!==input.originalText)throw new Error('회의록이 변경되었습니다. 최신 내용을 확인한 뒤 다시 저장하세요.');
+      if(typeof input.text!=='string'||/[\r\n]/.test(input.text))throw new Error('한 번에 한 줄씩 수정하세요.');
+      if(input.text!==input.originalText){lines[input.lineIndex]=input.text;const value=lines.join('\n');if(value.length>200000)throw new Error('회의록 항목은 200,000자 이하여야 합니다.');(minutes as Record<string,unknown>)[field]=value;minutes.version++;save(data);}result=minutes;
+    }
     else if (action==='minutes' && !subaction && method==='PUT') {m.content.minutes={...input,version:(m.content.minutes?.version || 0)+1,generationMode:'manual'} as Minutes; save(data);result=m.content.minutes;}
     else if (action==='participants' && method==='PUT') {
       m.content.participants=input.participants;

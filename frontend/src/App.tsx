@@ -5,7 +5,8 @@ import {standalone} from './standalone';
 import StandaloneNotice from './StandaloneNotice';
 import SetupTutorial, {tutorialNeeded} from "./SetupTutorial";
 import JobSteps from "./JobSteps";
-import MinutesDocument, { minutesText } from "./MinutesDocument";
+import { minutesText } from "./MinutesDocument";
+import EditableMinutesDocument from './EditableMinutesDocument';
 import TranscriptView from "./TranscriptView";
 import SpeechRetryUpload from "./SpeechRetryUpload";
 import AssigneeSelect, {type JiraUser} from "./AssigneeSelect";
@@ -991,6 +992,7 @@ function MinutesEditor({
   disabled: boolean;
 }) {
   const [editing,setEditing]=useState(false);
+  const [inlineEditing,setInlineEditing]=useState(false);
   const [templateOpen,setTemplateOpen]=useState(false);
   const [templateBusy,setTemplateBusy]=useState(false);
   const [templateApplied,setTemplateApplied]=useState(false);
@@ -1044,12 +1046,12 @@ function MinutesEditor({
           </p>
         </div>
         <div className="actions">
-          <button disabled={disabled||saving||templateBusy||editing} onClick={()=>{setTemplateOpen(true);setTemplateApplied(false);}}>회의록 양식 지정</button>
-          <button onClick={generate} disabled={disabled||templateBusy||saving||editing}>
+          <button disabled={disabled||saving||templateBusy||editing||inlineEditing} onClick={()=>{setTemplateOpen(true);setTemplateApplied(false);}}>회의록 양식 지정</button>
+          <button onClick={generate} disabled={disabled||templateBusy||saving||editing||inlineEditing}>
             회의록 생성
           </button>
-          {minutes&&<button onClick={() => downloadText(minutesText(meeting,minutes), "회의록.md")}>회의록 다운로드</button>}
-          {minutes&&!editing&&<button disabled={disabled||saving||templateBusy||templateOpen} onClick={()=>{setEditing(true);setSaved(false);}}>회의록 편집</button>}
+          {minutes&&<button disabled={inlineEditing||saving||templateBusy} onClick={() => downloadText(minutesText(meeting,minutes), "회의록.md")}>회의록 다운로드</button>}
+          {minutes&&!editing&&<button disabled={disabled||saving||templateBusy||templateOpen||inlineEditing} onClick={()=>{setEditing(true);setSaved(false);}}>회의록 편집</button>}
           {editing&&<button disabled={saving} onClick={()=>{setMinutes(meeting.content.minutes);setEditing(false);setError("");}}>편집 취소</button>}
           {editing&&<button
             className="primary"
@@ -1065,9 +1067,9 @@ function MinutesEditor({
       {templateOpen&&<MinutesTemplateDialog value={meeting.content.template||"일반"} onApply={applyTemplate} onClose={()=>setTemplateOpen(false)} disabled={disabled} applying={templateBusy}/>}
       {templateApplied&&<p className="help" role="status">회의록 양식을 적용했습니다.</p>}
       {saved&&<p className="help" role="status">회의록을 저장했습니다.</p>}
-      <ConfluenceMinutes meeting={meeting} disabled={disabled||saving||editing||templateBusy}/>
+      <ConfluenceMinutes meeting={meeting} disabled={disabled||saving||editing||templateBusy||inlineEditing}/>
       {editing&&<p className="minutes-edit-help">문서 순서대로 각 항목을 편집하세요. 입력 영역의 오른쪽 아래를 끌어 높이를 조절할 수 있습니다. 편집 후 상단의 ‘회의록 저장’을 누르세요.</p>}
-      {minutes&&!editing?<MinutesDocument meeting={meeting} minutes={minutes}/>:minutes?.formatted ? (
+      {minutes&&!editing?<EditableMinutesDocument key={meeting.id} meeting={meeting} minutes={minutes} disabled={disabled||saving||templateBusy||templateOpen} onEditingChange={setInlineEditing} onSaved={value=>{setMinutes(value);setSaved(false);void reload();}}/>:minutes?.formatted ? (
         <label className="minutes-custom-editor">업로드 양식으로 작성한 회의록
           <textarea rows={24} value={minutes.formatted} disabled={disabled || saving}
             onChange={e => {setMinutes({...minutes, formatted: e.target.value}); setSaved(false);}} />

@@ -21,6 +21,8 @@ public final class Domain {
     public record AnalysisFlowInput(@NotBlank @Pattern(regexp="AUTO|CONFIRM") String mode) {}
     public record ContinueStageInput(@Min(1) @Max(10) int expectedStageIndex) {}
     public record MinutesTemplateInput(@NotBlank @Size(max=20000) String template) {}
+    public record MinutesLineInput(@NotBlank @Pattern(regexp="formatted|overview|summary|discussion|decisions|openQuestions|followUp") String field,
+        @Min(0) int lineIndex,@NotNull @Size(max=200000) String originalText,@NotNull @Size(max=200000) String text,@Min(1) int expectedVersion) {}
     public record ParticipantsInput(@NotNull @Size(max=100) List<@NotBlank @Size(max=100) String> participants,@NotNull @Size(max=3000) Map<String,String> segmentSpeakers) {}
     public record Evidence(String segmentId, long startMs, String speaker, String quote,
                            boolean estimatedTime) {}

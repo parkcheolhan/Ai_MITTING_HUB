@@ -71,6 +71,7 @@ public class Api {
     @PostMapping("/meetings/{id}/minutes/generate") public Job minutes(@PathVariable String id) { return worker.start(id,"MINUTES"); }
     @PutMapping("/meetings/{id}/minutes/template") public MeetingView template(@PathVariable String id,@Valid @RequestBody MinutesTemplateInput input){var result=service.setMinutesTemplate(id,input);confluence.autoSync(id);return result;}
     @PutMapping("/meetings/{id}/minutes") public Minutes saveMinutes(@PathVariable String id,@RequestBody Minutes minutes) {var result=service.saveMinutes(id,minutes);confluence.autoSync(id);return result;}
+    @PatchMapping("/meetings/{id}/minutes/line") public Minutes saveMinutesLine(@PathVariable String id,@Valid @RequestBody MinutesLineInput input){var result=service.saveMinutesLine(id,input);confluence.autoSync(id);return result;}
     @PostMapping("/meetings/{id}/analyze") public Job analyze(@PathVariable String id) { return worker.start(id,"ANALYZE"); }
     @PostMapping("/meetings/{id}/schedule") @ResponseStatus(HttpStatus.ACCEPTED) public Job schedule(@PathVariable String id,@Valid @RequestBody ScheduleRequest input){return worker.schedule(id,input);}
     @GetMapping("/meetings/{id}/items") public List<Item> items(@PathVariable String id) { return service.get(id).content().items; }

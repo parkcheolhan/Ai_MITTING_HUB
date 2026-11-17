@@ -131,6 +131,18 @@ public class MeetingService {
         minutes.version=c.minutes.version+1;minutes.generationMode=c.minutes.generationMode;minutes.generationModel=c.minutes.generationModel;
         TimeReferences.clean(minutes);c.minutes=minutes; save(m,c); audits.save(new Audit("MINUTES_EDITED",id)); return minutes;
     }
+    public Minutes saveMinutesLine(String id,MinutesLineInput input){
+        var m=lock(id);editable(m);var c=content(m);require(c.minutes!=null,"회의록을 먼저 생성하세요.");var minutes=c.minutes;
+        if(minutes.version!=input.expectedVersion())throw new ResponseStatusException(HttpStatus.CONFLICT,"회의록이 다른 곳에서 변경되었습니다. 입력한 문구는 유지했습니다. 최신 내용을 확인한 뒤 다시 저장하세요.");
+        String value=switch(input.field()){case "formatted"->minutes.formatted;case "overview"->minutes.overview;case "summary"->minutes.summary;case "discussion"->minutes.discussion;case "decisions"->minutes.decisions;case "openQuestions"->minutes.openQuestions;case "followUp"->minutes.followUp;default->throw new IllegalArgumentException("수정할 회의록 항목을 확인하세요.");};
+        var lines=Objects.toString(value,"").split("\\r?\\n",-1);
+        if(input.lineIndex()>=lines.length||!lines[input.lineIndex()].equals(input.originalText()))throw new ResponseStatusException(HttpStatus.CONFLICT,"해당 줄이 변경되었습니다. 입력한 문구는 유지했습니다. 최신 내용을 확인하세요.");
+        require(!input.text().contains("\n")&&!input.text().contains("\r"),"한 번에 한 줄씩 수정하세요.");
+        if(input.text().equals(input.originalText()))return minutes;
+        lines[input.lineIndex()]=input.text();String updated=String.join("\n",lines);require(updated.length()<=200000,"회의록 항목은 200,000자 이하여야 합니다.");
+        switch(input.field()){case "formatted"->minutes.formatted=updated;case "overview"->minutes.overview=updated;case "summary"->minutes.summary=updated;case "discussion"->minutes.discussion=updated;case "decisions"->minutes.decisions=updated;case "openQuestions"->minutes.openQuestions=updated;case "followUp"->minutes.followUp=updated;}
+        minutes.version++;save(m,c);audits.save(new Audit("MINUTES_LINE_EDITED",id));return minutes;
+    }
     public MeetingView setMinutesTemplate(String id,MinutesTemplateInput input){
         var m=lock(id);editable(m);MinutesTemplate.validate(input.template());var c=content(m);
         c.template=input.template();
