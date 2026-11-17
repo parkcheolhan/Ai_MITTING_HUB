@@ -14,7 +14,7 @@ export default function AssigneeSelect({project,value,name,disabled,onChange}:{p
   return <div className="assignee-select" onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))setOpen(false);}}>
     <label htmlFor={id}>담당자</label>
     <div className="assignee-input"><input id={id} role="combobox" aria-label="담당자 검색" aria-expanded={open} aria-controls={`${id}-list`} aria-autocomplete="list" aria-activedescendant={index>=0?`${id}-option-${index}`:undefined} disabled={disabled} placeholder="프로젝트 담당자 검색·선택" value={open?query:(name||resolved||(value?'현재 담당자 · '+value:''))} onFocus={()=>{setOpen(true);setQuery('');}} onChange={e=>{setQuery(e.target.value);setOpen(true);}} onKeyDown={e=>{
-      if(e.key==='Escape'){setOpen(false);return;}
+      if(e.key==='Escape'&&open){e.preventDefault();e.stopPropagation();setOpen(false);return;}
       if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();setOpen(true);setIndex(i=>users.length?(e.key==='ArrowDown'?(i+1)%users.length:(i-1+users.length)%users.length):-1);}
       if(e.key==='Enter'&&open){e.preventDefault();if(index>=0&&users[index])choose(users[index]);}
     }}/>{value&&<button type="button" aria-label="담당자 지정 해제" disabled={disabled} onClick={()=>{onChange(null);setOpen(false);}}>×</button>}</div>

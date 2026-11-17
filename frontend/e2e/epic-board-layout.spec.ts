@@ -18,8 +18,8 @@ test('aligns epic columns horizontally and scrolls to distant drop targets while
   await expect(columns).toHaveCount(6);
   const boxes=await columns.evaluateAll(elements=>elements.map(el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,height:r.height};}));
   for(let i=1;i<boxes.length;i++){expect(Math.abs(boxes[i].y-boxes[0].y)).toBeLessThan(2);expect(boxes[i].x).toBeGreaterThan(boxes[i-1].x);expect(boxes[i].height).toBe(boxes[0].height);}
-  const panel=(await page.locator('.candidate-panel').boundingBox())!,editor=(await page.locator('.ticket-editor').boundingBox())!;
-  expect(editor.y).toBeGreaterThanOrEqual(panel.y+panel.height);expect(editor.width).toBeCloseTo(panel.width,0);
+  const panel=(await page.locator('.candidate-panel').boundingBox())!;
+  await expect(page.getByRole('dialog',{name:'티켓 상세정보',exact:true})).toHaveCount(0);expect(panel.width).toBeGreaterThan(1000);
   expect(await lanes.evaluate(el=>el.scrollWidth>el.clientWidth)).toBe(true);expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440);
   const unassigned=page.getByRole('region',{name:'미배치 업무 목록',exact:true});
   await unassigned.evaluate(el=>{el.scrollTop=200;});expect(await unassigned.evaluate(el=>el.scrollTop)).toBeGreaterThan(100);

@@ -62,6 +62,6 @@ test('locks registered groups and prevents moves with unsaved ticket edits',asyn
     return route.fulfill({json:path==='/api/meetings/board'?meeting:path==='/api/settings'?{mode:'mock'}:path.endsWith('/issue-types')?[{id:'Task',name:'Task'}]:[]});
   });
   await page.goto('/meetings/board/tickets');await expect(page.getByLabel('운영 점검 에픽 이동')).toBeDisabled();await expect(page.locator('[data-draft-id="other"]')).toHaveAttribute('draggable','false');
-  await page.locator('.ticket-editor input').filter({visible:true}).first().waitFor();
+  await page.locator('.candidate').first().getByRole('button').click();await page.locator('.ticket-editor input').filter({visible:true}).first().waitFor();
   await page.getByLabel('제목',{exact:true}).fill('저장 전 변경');await expect(page.getByLabel('로그인 개선 에픽 이동')).toBeDisabled();await expect(page.getByRole('button',{name:'에픽 조회·추가',exact:true})).toBeDisabled();
 });

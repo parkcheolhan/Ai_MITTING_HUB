@@ -12,7 +12,7 @@ async function setup(page:Page){
   if(path.endsWith('/schedule/children')){const input=route.request().postDataJSON();state.bulk.push(input);meeting.drafts.forEach(d=>{Object.assign(d,{scheduleMode:input.scheduleMode,startAt:input.scheduleMode==='AI'?'':input.startAt,endAt:input.scheduleMode==='AI'?'':input.endAt,dueDate:input.scheduleMode==='AI'?'':input.endAt.slice(0,10)});d.version++;});return route.fulfill({json:meeting.drafts});}
   return route.fulfill({json:path==='/api/meetings/deadline-bulk'?meeting:path==='/api/settings'?{mode:'mock',configured:true,missing:[]}:path==='/api/settings/ai'?{mode:'mock',configured:true}:path.endsWith('/projects')?[{key:'TEST',name:'테스트'}]:[]});
  });
- await page.goto('/meetings/deadline-bulk/tickets');return {meeting,state};
+ await page.goto('/meetings/deadline-bulk/tickets');await page.locator('.candidate').first().getByRole('button').click();return {meeting,state};
 }
 
 test('saves manual dates for the selected task without changing other tasks',async({page})=>{

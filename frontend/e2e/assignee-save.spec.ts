@@ -15,7 +15,7 @@ async function setup(page:Page){
   if(path==='/api/meetings/assignee-save')state.reads++;
   return route.fulfill({json:path==='/api/meetings/assignee-save'?meeting:path==='/api/settings'?{mode:'mock',configured:true,missing:[]}:path==='/api/settings/ai'?{mode:'mock',configured:true}:path.endsWith('/projects')?[{key:'TEST',name:'테스트'}]:[]});
  });
- await page.goto('/meetings/assignee-save/tickets');
+ await page.goto('/meetings/assignee-save/tickets');await page.locator('.candidate').first().getByRole('button').click();
  return {state,meeting};
 }
 async function choose(page:Page){await page.getByRole('combobox',{name:'담당자 검색'}).fill('민수');await page.getByRole('option',{name:/김민수/}).click();}
@@ -29,7 +29,7 @@ test('assignee-only selection saves immediately and leaves ticket navigation and
  await expect(page.getByRole('button',{name:'변경사항 저장',exact:true})).toHaveCount(0);
  const reads=state.reads;await expect.poll(()=>state.reads).toBeGreaterThan(reads);
  await expect(page.getByRole('combobox',{name:'담당자 검색'})).toHaveValue('김민수');
- await page.locator('.candidate').last().getByRole('button').click();await expect(page.getByLabel('제목',{exact:true})).toHaveValue('다른 업무');
+ await page.getByRole('button',{name:'티켓 상세 닫기',exact:true}).click();await expect(page.getByRole('dialog',{name:'티켓 상세정보',exact:true})).toHaveCount(0);await page.locator('.candidate').last().getByRole('button').click();await expect(page.getByLabel('제목',{exact:true})).toHaveValue('다른 업무');
  expect(errors).toEqual([]);
 });
 
@@ -51,28 +51,17 @@ test('failed assignee save restores the selection and releases controls for retr
  await expect(page.locator('.ticket-editor-header')).toContainText('담당자를 저장하지 못했습니다.');
  await expect(page.getByRole('combobox',{name:'담당자 검색'})).toBeEnabled();await expect(page.getByRole('combobox',{name:'담당자 검색'})).toHaveValue('');
  state.fail=false;await choose(page);await expect(page.locator('.ticket-editor-header')).toContainText('담당자를 저장했습니다.');
- await page.locator('.candidate').last().getByRole('button').click();await expect(page.getByLabel('제목',{exact:true})).toHaveValue('다른 업무');
+ await page.getByRole('button',{name:'티켓 상세 닫기',exact:true}).click();await expect(page.getByRole('dialog',{name:'티켓 상세정보',exact:true})).toHaveCount(0);await page.locator('.candidate').last().getByRole('button').click();await expect(page.getByLabel('제목',{exact:true})).toHaveValue('다른 업무');
 });
-test('long descriptions expand without nested scroll and wheel scrolling moves the page',async({page})=>{
- await setup(page);const editor=page.locator('.ticket-editor'),description=page.getByLabel('설명',{exact:true});
+
+test('long descriptions expand and scrolling stays inside the slide panel',async({page})=>{
+ await setup(page);const description=page.getByLabel('설명',{exact:true}),body=page.locator('.ticket-editor-body');
  for(const width of [1440,390]){
-  await page.setViewportSize({width,height:900});
+  await page.setViewportSize({width,height:900});await body.evaluate(el=>{el.scrollTop=0;});
   await expect.poll(()=>description.evaluate(el=>el.scrollHeight-el.clientHeight)).toBeLessThanOrEqual(2);
-  expect(await editor.evaluate(el=>getComputedStyle(el).overflowY)).toBe('visible');
   expect(await description.evaluate(el=>getComputedStyle(el).overflowY)).toBe('hidden');
-  expect(await editor.evaluate(el=>el.scrollHeight-el.clientHeight)).toBeLessThanOrEqual(2);
-  const height=(await description.boundingBox())!.height;
-  await description.fill(('추가로 편집할 긴 설명입니다.\n').repeat(120));
-  await expect.poll(async()=>(await description.boundingBox())!.height).toBeGreaterThan(height);
-  await description.hover();const before=await page.evaluate(()=>scrollY);await page.mouse.wheel(0,400);await expect.poll(()=>page.evaluate(()=>scrollY)).toBeGreaterThan(before);
-  await expect.poll(()=>page.locator('.ticket-editor-body').evaluate(el=>parseFloat(el.style.getPropertyValue('--editor-clip-top'))||0)).toBeGreaterThan(0);
-  expect(await editor.evaluate(el=>{const content=el.querySelector<HTMLElement>('.ticket-editor-body')!,r=content.getBoundingClientRect(),h=el.querySelector('.ticket-editor-header')!.getBoundingClientRect(),x=r.left+r.width/2,clip=parseFloat(content.style.getPropertyValue('--editor-clip-top'));return Math.abs(r.top+clip-h.bottom)<2&&[4,h.bottom-2].every(y=>y<0||!content.contains(document.elementFromPoint(x,y)));})).toBe(true);
-  expect(await editor.evaluate(el=>{
-    const body=el.querySelector<HTMLElement>('.ticket-editor-body')!,r=body.getBoundingClientRect(),header=el.querySelector('.ticket-editor-header')!.getBoundingClientRect(),clip=parseFloat(body.style.getPropertyValue('--editor-clip-top'));
-    return getComputedStyle(el).backgroundColor==='rgba(0, 0, 0, 0)'&&parseFloat(getComputedStyle(el).borderTopWidth)===0&&Math.abs(r.top+clip-header.bottom)<2&&[r.left+.5,r.left+r.width/2,r.right-.5].every(x=>[4,header.bottom-1].every(y=>!body.contains(document.elementFromPoint(x,y))));
-  })).toBe(true);
-  await expect(page.getByRole('button',{name:'변경사항 저장',exact:true})).toBeInViewport();
-  await page.getByRole('button',{name:'편집 취소',exact:true}).click();
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  const height=(await description.boundingBox())!.height;await description.fill(('추가로 편집할 긴 설명입니다.\n').repeat(120));await expect.poll(async()=>(await description.boundingBox())!.height).toBeGreaterThan(height);
+  await body.evaluate(el=>{el.scrollTop=200;});const windowScroll=await page.evaluate(()=>scrollY);await body.hover();const before=await body.evaluate(el=>el.scrollTop);await page.mouse.wheel(0,400);await expect.poll(()=>body.evaluate(el=>el.scrollTop)).toBeGreaterThan(before);expect(await page.evaluate(()=>scrollY)).toBe(windowScroll);
+  await expect(page.getByRole('button',{name:'변경사항 저장',exact:true})).toBeInViewport();await page.getByRole('button',{name:'편집 취소',exact:true}).click();expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
  }
 });

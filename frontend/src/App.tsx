@@ -13,6 +13,7 @@ import AutoSizeTextarea from "./AutoSizeTextarea";
 import SchedulePanel, {displayDateTime,localDateTime,offsetDateTime} from "./SchedulePanel";
 import {ensureAiSchedule} from "./ensureAiSchedule";
 import EpicTicketBoard, {assignedEpicId} from './EpicTicketBoard';
+import TicketDetailsDrawer from './TicketDetailsDrawer';
 import { MinutesTemplateDialog, downloadText } from "./MinutesTemplate";
 import SettingsPage from "./JiraSettingsPage";
 import ProjectSpacesPage, {type ProjectSpace} from "./ProjectSpacesPage";
@@ -1127,27 +1128,14 @@ function TicketReview({
     [operationBusy, setBusy] = useState(false);
   const [savingField,setSavingField]=useState("");
   const [assigneeMessage,setAssigneeMessage]=useState("");
-  const ticketEditor=useRef<HTMLDivElement>(null);
-  const candidatePanel=useRef<HTMLDivElement>(null);
+  const [drawerOpen,setDrawerOpen]=useState(false);
   const approvalToolbar=useRef<HTMLDivElement>(null);
   useEffect(()=>{
     const toolbar=approvalToolbar.current,workspace=toolbar?.parentElement;if(!toolbar||!workspace)return;
     const measure=()=>workspace.style.setProperty('--review-toolbar-height',`${Math.ceil(toolbar.getBoundingClientRect().height)}px`);
     measure();const observer=new ResizeObserver(measure);observer.observe(toolbar);return()=>observer.disconnect();
   },[]);
-  useEffect(()=>{
-    const editor=ticketEditor.current,header=editor?.querySelector<HTMLElement>('.ticket-editor-header'),content=editor?.querySelector<HTMLElement>('.ticket-editor-body');if(!editor||!header||!content)return;
-    let frame=0;
-    const measure=()=>{
-      frame=0;
-      const body=content.getBoundingClientRect(),head=header.getBoundingClientRect();
-      content.style.setProperty('--editor-clip-top',`${Math.max(0,head.bottom-body.top)}px`);
-    };
-    const schedule=()=>{if(!frame)frame=requestAnimationFrame(measure);};
-    const observer=new ResizeObserver(schedule);observer.observe(content);observer.observe(header);if(approvalToolbar.current)observer.observe(approvalToolbar.current);
-    window.addEventListener('scroll',schedule,{passive:true});window.addEventListener('resize',schedule);measure();
-    return()=>{cancelAnimationFrame(frame);observer.disconnect();window.removeEventListener('scroll',schedule);window.removeEventListener('resize',schedule);content.style.removeProperty('--editor-clip-top');};
-  },[edit?.id]);
+  useEffect(()=>{if(drawerOpen&&!meeting.drafts.some(d=>d.id===focusId)){setDrawerOpen(false);setDirty(false);}},[drawerOpen,focusId,meeting.drafts]);
   const [projectsLoaded,setProjectsLoaded]=useState(false);
   const roots = meeting.drafts;
   const busy = operationBusy || aiRunning;
@@ -1230,12 +1218,12 @@ function TicketReview({
     );
   function focus(id: string) {
     if(busy)return;
-    if (dirty) {
+    if (dirty&&id!==focusId) {
       setError("수정한 내용을 먼저 저장하거나 변경 취소를 누르세요.");
       return;
     }
     setFocusId(id);
-    requestAnimationFrame(()=>ticketEditor.current?.scrollIntoView({block:'start',behavior:'instant'}));
+    setDrawerOpen(true);
   }
   function change(key: string, value: unknown) {
     setEdit((e) => (e ? { ...e, [key]: value } : null));
@@ -1274,7 +1262,7 @@ function TicketReview({
   function candidate(d:Draft){
     return <div className={"candidate "+(d.id===current?.id?"focused":"")} key={d.id}>
       <input aria-label={`${d.summary} 선택`} type="checkbox" disabled={busy} checked={selected.includes(d.id)} onChange={()=>toggle(d.id)} />
-      <button disabled={busy} onClick={()=>focus(d.id)}>
+      <button disabled={busy} aria-haspopup="dialog" aria-expanded={drawerOpen&&focusId===d.id} onClick={()=>focus(d.id)}>
         <span className="project-chip">{d.projectKey} · 작업</span>
         {d.registrationMode==="EXISTING"&&<small>기존 이슈 연결 · {d.existingIssueKey}</small>}
         <h3>{d.summary}</h3>
@@ -1295,6 +1283,7 @@ function TicketReview({
       <SchedulePanel meeting={meeting} disabled={busy||dirty||projectCorrection||!aiSettings.ready||!aiSettings.configured} reload={reload}/>
       {projectCorrection&&<p className="help">기존 후보의 프로젝트가 회의와 다릅니다. 초안을 저장하면 회의 프로젝트 '{meeting.content.projectKey}'가 적용됩니다.</p>}
       <ErrorBox error={error} />
+      {dirty&&!drawerOpen&&<div className="ticket-pending-edit" role="status"><span>‘{edit?.summary}’에 저장하지 않은 변경사항이 있습니다.</span><div className="actions"><button type="button" onClick={()=>setDrawerOpen(true)}>편집 계속</button><button type="button" onClick={cancelCurrentEdit}>변경 취소</button></div></div>}
       <div className="notice epic-summary">
         <strong>에픽을 추가하고 업무 티켓을 배치하세요</strong>
         <p>‘에픽 조회·추가’에서 기존 에픽이나 새 에픽 박스를 추가하고 업무를 배치하세요. 이동 후 다시 승인하면 배치한 에픽 아래에 등록됩니다. 업무를 우클릭하면 삭제 메뉴가 열립니다.</p>
@@ -1374,7 +1363,7 @@ function TicketReview({
       </div>
       <div className="review-grid">
         {busy&&assigneeMessage&&<p className="help full" role="status">{assigneeMessage}</p>}
-        <div ref={candidatePanel} className="panel candidate-panel">
+        <div className="panel candidate-panel">
           <div className="candidate-toolbar">
             <label>
               <input
@@ -1428,13 +1417,14 @@ function TicketReview({
             </button>
           </div>
         </div>
-        <div ref={ticketEditor} className="panel ticket-editor">
+        <TicketDetailsDrawer open={drawerOpen} onClose={()=>setDrawerOpen(false)} blocked={operationBusy} fallbackFocus={()=>document.querySelector<HTMLElement>(`[data-draft-id="${CSS.escape(focusId)}"] .candidate > button`)}>
+        <div className="panel ticket-editor">
           {edit ? (
             <>
               <div className="ticket-editor-header"><div className="editor-title">
                 <h2>티켓 상세 편집</h2>
                 <Badge status={edit.status} />
-                <button type="button" className="back-to-board" onClick={()=>candidatePanel.current?.scrollIntoView({block:'start',behavior:'instant'})}>배치 보드로</button>
+                <button type="button" className="ticket-drawer-close" aria-label="티켓 상세 닫기" disabled={operationBusy} onClick={()=>setDrawerOpen(false)}>닫기 <span aria-hidden="true">×</span></button>
               </div>
               {(dirty||projectCorrection)&&<div className="editor-save-strip"><span>저장하지 않은 변경사항이 있습니다.</span><div className="actions"><button type="button" disabled={busy} onClick={cancelCurrentEdit}>편집 취소</button><button type="button" className="primary" disabled={busy||editLocked} onClick={()=>void saveCurrentDraft()}>변경사항 저장</button></div></div>}
               {!!savingField&&<p className="editor-assignee-status" role="status">{savingField} 저장 중…</p>}
@@ -1580,6 +1570,7 @@ function TicketReview({
                       setSelected((s) => s.filter((id) => id !== edit.id));
                       setDirty(false);
                       setFocusId("");
+                      setDrawerOpen(false);
                     })
                   }
                 >
@@ -1605,6 +1596,7 @@ function TicketReview({
             <Empty>편집할 티켓을 선택하세요.</Empty>
           )}
         </div>
+        </TicketDetailsDrawer>
       </div>
       </div>
     </section>

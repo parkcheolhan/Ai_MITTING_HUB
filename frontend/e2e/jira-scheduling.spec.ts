@@ -14,11 +14,12 @@ test('approval automatically calculates missing AI dates before approving and pr
   if(path==='/api/ticket-drafts/approve'){calls.push('approve');const ids=route.request().postDataJSON().ids;meeting.drafts.filter((d:any)=>ids.includes(d.id)).forEach((d:any)=>{d.status='APPROVED';d.version++;});return route.fulfill({json:meeting.drafts});}
   return route.fulfill({json:path==='/api/meetings/schedule-ui'?meeting:path==='/api/settings'?{mode:'mock',configured:true,missing:[]}:path==='/api/settings/ai'?{mode:'mock',configured:true}:path.endsWith('/projects')?[{key:'TEST',name:'테스트'}]:[]});
  });
- await page.goto('/meetings/schedule-ui/tickets');await expect(page.getByLabel('기한 설정 방식')).toHaveValue('AI');
+ await page.goto('/meetings/schedule-ui/tickets');await page.locator('.candidate').first().getByRole('button').click();await expect(page.getByLabel('기한 설정 방식')).toHaveValue('AI');
+ await page.getByRole('button',{name:'티켓 상세 닫기',exact:true}).click();await expect(page.getByRole('dialog',{name:'티켓 상세정보',exact:true})).toHaveCount(0);
  await page.getByRole('checkbox',{name:'보안 개선 선택'}).check();
  await page.getByRole('button',{name:'선택 승인',exact:true}).click();
  await expect.poll(()=>calls).toEqual(['schedule','approve']);
- await expect(page.locator('.ticket-schedule')).toContainText('60분');
+ await page.locator('.candidate').first().getByRole('button').click();await expect(page.locator('.ticket-schedule')).toContainText('60분');await page.getByRole('button',{name:'티켓 상세 닫기',exact:true}).click();await expect(page.getByRole('dialog',{name:'티켓 상세정보'})).toHaveCount(0);
  await page.getByRole('button',{name:'선택 승인',exact:true}).click();
  await expect.poll(()=>calls).toEqual(['schedule','approve','approve']);
 });
@@ -32,7 +33,7 @@ test('searches project assignees, assigns independent tasks and schedules cross-
   if(path.endsWith('/schedule')){scheduleRequest=route.request().postDataJSON();meeting.drafts.forEach((d,i)=>{d.scheduleMode='AI';d.startAt=i===2?'2027-03-01T11:00:00+09:00':'2027-03-01T09:00:00+09:00';d.endAt=i===1?'2027-03-01T11:00:00+09:00':'2027-03-01T14:00:00+09:00';d.estimatedMinutes=i===0?240:120;d.scheduleReason='구현 후 결과 검증';d.dependencyDraftIds=i===2?['a']:[];d.version++;});return route.fulfill({json:{id:'schedule-job',type:'SCHEDULE',status:'QUEUED'}});}
   return route.fulfill({json:path==='/api/meetings/schedule-ui'?meeting:path==='/api/settings'?{mode:'mock',configured:true,defaultProject:'TEST',missing:[]}:path==='/api/settings/ai'?{mode:'mock',configured:true}:path==='/api/integrations/jira/projects'?[{key:'TEST',name:'테스트'}]:path.endsWith('/issue-types')?[{id:'Task',name:'Task'},{id:'Sub-task',name:'Sub-task',subtask:'true'}]:[]});
  });
- await page.goto('/meetings/schedule-ui/tickets');
+ await page.goto('/meetings/schedule-ui/tickets');await page.locator('.candidate').first().getByRole('button').click();
  await expect(page.locator('.ticket-editor').getByLabel('프로젝트',{exact:true})).toHaveCount(0);
  await expect(page.locator('.ticket-editor').getByLabel('상위 티켓',{exact:true})).toHaveCount(0);
  const search=page.getByRole('combobox',{name:'담당자 검색'});await search.fill('민수');await page.getByRole('option',{name:/김민수/}).click();
@@ -60,6 +61,6 @@ test('saves explicit manual start and end times with timezone and keeps AI mode 
  await page.route('**/api/**',route=>{const path=new URL(route.request().url()).pathname;
   if(path==='/api/ticket-drafts/root'&&route.request().method()==='PUT'){saved=route.request().postDataJSON();Object.assign(meeting.drafts[0],saved);meeting.drafts[0].version++;return route.fulfill({json:meeting.drafts[0]});}
   return route.fulfill({json:path==='/api/meetings/schedule-ui'?meeting:path==='/api/settings'?{mode:'mock',configured:true,missing:[]}:path==='/api/settings/ai'?{mode:'mock',configured:true}:path.endsWith('/projects')?[{key:'TEST',name:'테스트'}]:[]});});
- await page.goto('/meetings/schedule-ui/tickets');await page.getByLabel('업무 시작 일시').fill('2027-03-01T09:00');await page.getByLabel('업무 종료 일시').fill('2027-03-01T18:00');await page.getByLabel('예상 작업시간',{exact:true}).fill('480');await page.getByRole('button',{name:'초안 저장',exact:true}).click();
+ await page.goto('/meetings/schedule-ui/tickets');await page.locator('.candidate').first().getByRole('button').click();await page.getByLabel('업무 시작 일시').fill('2027-03-01T09:00');await page.getByLabel('업무 종료 일시').fill('2027-03-01T18:00');await page.getByLabel('예상 작업시간',{exact:true}).fill('480');await page.getByRole('button',{name:'초안 저장',exact:true}).click();
  await expect.poll(()=>saved?.startAt).toMatch(/2027-03-01T09:00:00[+-]\d\d:\d\d/);expect(saved.scheduleMode||'MANUAL').toBe('MANUAL');expect(saved.endAt).toContain('18:00');expect(saved.projectKey).toBe('TEST');expect(saved.estimatedMinutes).toBe(480);
 });
