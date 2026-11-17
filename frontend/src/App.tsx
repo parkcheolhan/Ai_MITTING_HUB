@@ -1125,7 +1125,6 @@ function TicketReview({
     [dirty, setDirty] = useState(false),
     [error, setError] = useState(""),
     [operationBusy, setBusy] = useState(false);
-  const [expanded, setExpanded] = useState<string[]>([]);
   const [savingField,setSavingField]=useState("");
   const [assigneeMessage,setAssigneeMessage]=useState("");
   const ticketEditor=useRef<HTMLDivElement>(null);
@@ -1154,8 +1153,7 @@ function TicketReview({
     return()=>{cancelAnimationFrame(frame);observer.disconnect();window.removeEventListener('scroll',schedule);window.removeEventListener('resize',schedule);content.style.removeProperty('--editor-clip-top');};
   },[edit?.id]);
   const [projectsLoaded,setProjectsLoaded]=useState(false);
-  const childDrafts = (id:string) => meeting.drafts.filter(d => d.parentDraftId === id);
-  const roots = meeting.drafts.filter(d => !d.parentDraftId || !meeting.drafts.some(p=>p.id===d.parentDraftId));
+  const roots = meeting.drafts;
   const busy = operationBusy || aiRunning;
   const current =
     meeting.drafts.find((d) => d.id === focusId) || meeting.drafts[0];
@@ -1187,7 +1185,7 @@ function TicketReview({
   }, [edit?.projectKey, edit?.registrationMode, real]);
   const selectedType = issueTypes.find(
     (t) => t.id === edit?.issueType || t.name === edit?.issueType,
-  ) || (edit?.parentDraftId && edit.issueType === "Sub-task" ? issueTypes.find(t=>String(t.subtask)==="true") : edit?.issueType==="Task" ? issueTypes.find(t=>String(t.subtask)!=="true"&&(t.name==="작업"||t.name.toLowerCase()==="task")) : undefined);
+  ) || issueTypes.find(t=>String(t.subtask)!=="true"&&(t.name==="작업"||t.name.toLowerCase()==="task"));
   useEffect(() => {
     setJiraFields([]);
     if (!real || !edit?.projectKey || !selectedType || edit.registrationMode==="EXISTING") return;
@@ -1208,13 +1206,11 @@ function TicketReview({
   const priorities =
     jiraFields.find((f) => f.id === "priority")?.allowedValues || [];
   useEffect(() => {
-    if (!dirty)setEdit(current ? { ...current,projectKey:meeting.content.projectKey } : null);
+    if (!dirty)setEdit(current ? { ...current,projectKey:meeting.content.projectKey,issueType:'Task',parentDraftId:'' } : null);
   }, [current?.id, current?.version, dirty]);
   useEffect(()=>setAssigneeMessage(""),[current?.id]);
-  const toggle = (id: string) => setSelected(s=>{
-    const group=[id,...childDrafts(id).map(d=>d.id)];
-    return s.includes(id)?s.filter(v=>!group.includes(v)):[...new Set([...s,...group])];
-  });
+  const toggle = (id: string) => setSelected(s=>s.includes(id)?s.filter(v=>v!==id):[...s,id]);
+  useEffect(()=>{const ids=new Set(meeting.drafts.map(d=>d.id));setSelected(previous=>previous.every(id=>ids.has(id))?previous:previous.filter(id=>ids.has(id)));},[meeting.drafts]);
   async function run(fn: () => Promise<void>) {
     setBusy(true);
     setError("");
@@ -1228,7 +1224,7 @@ function TicketReview({
     }
   }
   const selectedDrafts = meeting.drafts.filter((d) => selected.includes(d.id));
-  const unplacedSelection=selectedDrafts.some(d=>d.registrationMode!=="EXISTING"&&!d.parentDraftId&&!["PUBLISHED","UNKNOWN"].includes(d.status)&&!assignedEpicId(d,meeting.epics||[]));
+  const unplacedSelection=selectedDrafts.some(d=>d.registrationMode!=="EXISTING"&&!["PUBLISHED","UNKNOWN"].includes(d.status)&&!assignedEpicId(d,meeting.epics||[]));
   const projectCorrection=!!current&&current.projectKey!==meeting.content.projectKey;
   const invalidSelectedProject=selectedDrafts.some(d=>d.projectKey!==meeting.content.projectKey)||(real&&projectsLoaded&&selectedDrafts.some(d=>!projects.some(p=>p.key===d.projectKey)));
   const approved =
@@ -1243,7 +1239,6 @@ function TicketReview({
       return;
     }
     setFocusId(id);
-    if(childDrafts(id).length)setExpanded(s=>s.includes(id)?s.filter(v=>v!==id):[...s,id]);
   }
   function change(key: string, value: unknown) {
     setEdit((e) => (e ? { ...e, [key]: value } : null));
@@ -1274,30 +1269,19 @@ function TicketReview({
     const next:Draft={...edit,projectKey:meeting.content.projectKey,scheduleMode:mode,...(mode==="AI"?{startAt:"",endAt:"",dueDate:"",estimatedMinutes:0}:{})};
     await autoSaveDraft(next,"기한 설정");
   }
-  function applyScheduleToChildren(){
-    if(!edit)return;
-    const input=edit,keys=["summary","description","assignee","assigneeName","priority","issueType","labels","registrationMode","existingIssueKey","estimatedMinutes","dependencyDraftIds"] as const;
-    const pending=Object.fromEntries(keys.filter(key=>JSON.stringify(input[key])!==JSON.stringify(current?.[key])).map(key=>[key,input[key]]));
-    return run(async()=>{
-      const group=await api<Draft[]>(`/ticket-drafts/${input.id}/schedule/children`,"POST",{scheduleMode:input.scheduleMode||"AI",startAt:input.startAt||"",endAt:input.endAt||"",dueDate:input.dueDate||""});
-      const saved=group.find(d=>d.id===input.id);if(saved){setEdit({...saved,...pending});setDirty(Object.keys(pending).length>0);}
-      setAssigneeMessage((input.scheduleMode||"AI")==="AI"?"하위업무 전체에 AI 방식을 저장했습니다. AI 일정 설정에서 업무별 기간을 산정하세요.":"상위·하위업무의 기한을 저장했습니다.");
-    });
-  }
   function saveCurrentDraft(){
     if(!edit)return;
     return run(async()=>{const saved=await api<Draft>(`/ticket-drafts/${edit.id}`,"PUT",edit);setEdit(saved);setDirty(false);setAssigneeMessage("변경사항을 저장했습니다.");});
   }
-  function cancelCurrentEdit(){setDirty(false);setEdit(current?{...current,projectKey:meeting.content.projectKey}:null);setError("");setAssigneeMessage("");}
-  function candidate(d:Draft,child=false){
-    const children=childDrafts(d.id);
-    return <div className={"candidate "+(child?"subtask-candidate ":"")+(d.id===current?.id?"focused":"")} key={d.id}>
+  function cancelCurrentEdit(){setDirty(false);setEdit(current?{...current,projectKey:meeting.content.projectKey,issueType:'Task',parentDraftId:''}:null);setError("");setAssigneeMessage("");}
+  function candidate(d:Draft){
+    return <div className={"candidate "+(d.id===current?.id?"focused":"")} key={d.id}>
       <input aria-label={`${d.summary} 선택`} type="checkbox" disabled={busy} checked={selected.includes(d.id)} onChange={()=>toggle(d.id)} />
-      <button disabled={busy} onClick={()=>focus(d.id)} aria-expanded={children.length?expanded.includes(d.id):undefined}>
-        <span className="project-chip">{child?"↳ 하위업무 · ":"상위업무 · "}{d.projectKey} · {d.issueType}</span>
+      <button disabled={busy} onClick={()=>focus(d.id)}>
+        <span className="project-chip">{d.projectKey} · 작업</span>
         {d.registrationMode==="EXISTING"&&<small>기존 이슈 연결 · {d.existingIssueKey}</small>}
         <h3>{d.summary}</h3>
-        <div><Badge status={d.status}/>{d.labels.includes("ai-recommended")&&<span className="ai-recommendation-tag">AI 추천</span>}{children.length>0&&<small>{expanded.includes(d.id)?"▾":"▸"} 하위 {children.length}개</small>}{d.duplicateSuspected&&<small className="warning">유사 후보 있음</small>}</div>
+        <div><Badge status={d.status}/>{d.labels.includes("ai-recommended")&&<span className="ai-recommendation-tag">AI 추천</span>}{d.duplicateSuspected&&<small className="warning">유사 후보 있음</small>}</div>
       </button>
     </div>;
   }
@@ -1309,14 +1293,14 @@ function TicketReview({
           <p>내용을 저장한 뒤 승인하세요. 수정하면 승인이 해제됩니다.</p>
         </div>
       </div>
-      <p className="help">작업·확인 항목은 상위 티켓에 연결된 하위 후보로 자동 생성됩니다. AI가 추가로 제안한 업무에는 ‘AI 추천’ 태그가 표시됩니다. 부모를 클릭해 하위를 펼치고 추천 이유와 작업 범위를 검토한 뒤 승인·등록하세요.</p>
+      <p className="help">업무는 에픽 아래의 독립된 작업으로 구성됩니다. AI가 추가로 제안한 업무에는 ‘AI 추천’ 태그가 표시됩니다. 작업 범위를 검토한 뒤 승인·등록하세요.</p>
       <p className="help">AI는 같은 목적의 협의·작업·확인·검증을 하나의 실행 단위로 묶어 티켓을 구성합니다. 세부 수행 내용은 작업목록과 검토사항에 유지하고 독립적인 결과물만 별도 업무로 나눕니다.</p>
       <SchedulePanel meeting={meeting} disabled={busy||dirty||projectCorrection||!aiSettings.ready||!aiSettings.configured} reload={reload}/>
       {projectCorrection&&<p className="help">기존 후보의 프로젝트가 회의와 다릅니다. 초안을 저장하면 회의 프로젝트 '{meeting.content.projectKey}'가 적용됩니다.</p>}
       <ErrorBox error={error} />
       <div className="notice epic-summary">
         <strong>에픽을 추가하고 업무 티켓을 배치하세요</strong>
-        <p>후보 목록의 ‘에픽 조회·추가’에서 기존 에픽을 조회하거나 새 에픽 박스를 추가하세요. 업무를 박스로 드래그하면 하위업무도 함께 이동합니다. 이동 후 다시 승인하면 배치한 에픽 아래에 등록됩니다.</p>
+        <p>‘에픽 조회·추가’에서 기존 에픽이나 새 에픽 박스를 추가하고 업무를 배치하세요. 이동 후 다시 승인하면 배치한 에픽 아래에 등록됩니다. 업무를 우클릭하면 삭제 메뉴가 열립니다.</p>
         {unplacedSelection&&<p className="warning" role="status">선택한 업무를 에픽 박스에 배치한 뒤 등록하세요.</p>}
         {meeting.epics?.filter(e=>e.status==="PUBLISHED"&&!e.external).map(e=><p key={e.id} className={e.contentError?'warning':'help'}>{e.issueKey} · {e.contentStatus==="SYNCED"?`회의록·원본 동기화 완료 (등록 원본 ${meeting.content.assets.length}개)`:(e.contentError||'회의록·원본 동기화 필요')}</p>)}
         {meeting.epics?.some(e=>e.status==="PUBLISHED"&&!e.external)&&<button disabled={busy||dirty} onClick={()=>run(async()=>{await api(`/meetings/${meeting.id}/epics/sync`,"POST");})}>에픽 회의록·녹음 동기화</button>}
@@ -1410,13 +1394,11 @@ function TicketReview({
               />
               전체 선택
             </label>
-            <span>상위 {roots.length}개 · 하위 {meeting.drafts.length-roots.length}개</span>
+            <span>업무 {roots.length}개</span>
           </div>
-          {meeting.drafts.some(d=>!!d.parentDraftId)&&<div className="candidate-toolbar"><button onClick={()=>setExpanded(roots.map(d=>d.id))}>하위 후보 모두 펼치기</button><button onClick={()=>setExpanded([])}>접기</button></div>}
           <div className="candidate-scroll" role="region" aria-label="티켓 후보 목록" tabIndex={0}>
           <EpicTicketBoard meeting={meeting} roots={roots} disabled={busy||dirty} onBusyChange={setBusy} reload={reload} renderRoot={d=><div className="candidate-group" key={d.id}>
             {candidate(d)}
-            {expanded.includes(d.id)&&childDrafts(d.id).length>0&&<div className="subtask-list" aria-label={`${d.summary} 하위 티켓`}>{childDrafts(d.id).map(child=>candidate(child,true))}</div>}
           </div>}/>
           {!meeting.drafts.length && (
             <Empty>업무 분석에서 JIRA 후보를 생성하세요.</Empty>
@@ -1511,25 +1493,6 @@ function TicketReview({
                 </button>
               </div>
               <div className="form-grid">
-                <label>
-                  이슈 유형
-                  <select
-                    value={edit.issueType}
-                    onChange={(e) => change("issueType", e.target.value)}
-                    disabled={editLocked}
-                  >
-                    {!issueTypes.some((t) => t.id === edit.issueType) && (
-                      <option value={edit.issueType}>
-                        {edit.issueType} {edit.registrationMode==="EXISTING"?"· 기존 이슈 연결":real ? (edit.parentDraftId && edit.issueType==="Sub-task"?"· 하위 유형 자동 선택":"· 실제 유형 선택 필요") : ""}
-                      </option>
-                    )}
-                    {issueTypes.filter(t=>edit.parentDraftId?String(t.subtask)==="true":String(t.subtask)!=="true"&&!['Epic','에픽'].includes(t.name)).map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
                 <label className="full">
                   제목
                   <input
@@ -1549,15 +1512,10 @@ function TicketReview({
                     disabled={editLocked}
                   />
                 </label>
-                <div className="full assignee-field"><div className="assignee-save-row"><AssigneeSelect key={edit.id} project={meeting.content.projectKey} value={edit.assignee||''} name={edit.assigneeName} disabled={editLocked} onChange={user=>void selectAssignee(user)}/>{!!edit.parentDraftId&&<button type="button" className="primary" aria-label="하위업무 담당자 저장" disabled={(!dirty&&!projectCorrection)||busy||editLocked} onClick={()=>void saveCurrentDraft()}>저장</button>}
-                  {!edit.parentDraftId&&childDrafts(edit.id).length>0&&<button type="button" className="bulk-inline-action" aria-label="이 담당자를 하위업무 전체에 적용" title="이 담당자를 하위업무 전체에 적용" disabled={busy||dirty||editLocked||!edit.assignee||childDrafts(edit.id).some(d=>['PUBLISHED','PUBLISHING','UNKNOWN'].includes(d.status)||d.registrationMode==='EXISTING')} onClick={()=>run(async()=>{await api(`/ticket-drafts/${edit.id}/assignee/children`,'POST',{assignee:edit.assignee,assigneeName:edit.assigneeName});})}>하위 전체 적용</button>}</div>
-                  <small className="help">다른 편집 내용이 없으면 담당자 선택은 즉시 저장됩니다.{!edit.parentDraftId&&childDrafts(edit.id).length>0&&" 저장 후 하위 전체에 적용할 수 있습니다. 적용하면 AI 일정을 다시 설정하세요."}</small>
-                </div>
-                <section className="full ticket-schedule" aria-label="업무 기한 설정"><div className="schedule-mode-row"><label>기한 설정 방식<select aria-label="기한 설정 방식" value={edit.scheduleMode||'AI'} disabled={editLocked} onChange={e=>void selectScheduleMode(e.target.value as 'MANUAL'|'AI')}><option value="MANUAL">직접 설정</option><option value="AI">AI 자동 설정</option></select></label>{!!edit.parentDraftId&&<button type="button" className="primary" aria-label="하위업무 기한 저장" disabled={(!dirty&&!projectCorrection)||busy||editLocked} onClick={()=>void saveCurrentDraft()}>저장</button>}
-                  {!edit.parentDraftId&&childDrafts(edit.id).length>0&&<button type="button" className="bulk-inline-action" aria-label="이 기한 설정을 하위업무 전체에 적용" title="이 기한 설정을 하위업무 전체에 적용" disabled={busy||editLocked||childDrafts(edit.id).some(d=>['PUBLISHED','PUBLISHING','UNKNOWN'].includes(d.status)||d.registrationMode==='EXISTING')||((edit.scheduleMode||'AI')==='MANUAL'&&!((edit.startAt&&edit.endAt)||edit.dueDate))} onClick={()=>void applyScheduleToChildren()}>하위 전체 적용</button>}</div>
+                <div className="full assignee-field"><div className="assignee-save-row"><AssigneeSelect key={edit.id} project={meeting.content.projectKey} value={edit.assignee||''} name={edit.assigneeName} disabled={editLocked} onChange={user=>void selectAssignee(user)}/></div><small className="help">다른 편집 내용이 없으면 담당자 선택은 즉시 저장됩니다.</small></div>
+                <section className="full ticket-schedule" aria-label="업무 기한 설정"><div className="schedule-mode-row"><label>기한 설정 방식<select aria-label="기한 설정 방식" value={edit.scheduleMode||'AI'} disabled={editLocked} onChange={e=>void selectScheduleMode(e.target.value as 'MANUAL'|'AI')}><option value="MANUAL">직접 설정</option><option value="AI">AI 자동 설정</option></select></label></div>
                   <p className="help">방식을 변경하면 현재 편집 내용과 함께 자동 저장됩니다.</p>
                   {(edit.scheduleMode||'AI')==='MANUAL'?<><div className="form-grid"><label>시작 일시<input type="datetime-local" aria-label="업무 시작 일시" disabled={editLocked} value={localDateTime(edit.startAt)} onChange={e=>change('startAt',offsetDateTime(e.target.value))}/></label><label>종료 일시<input type="datetime-local" aria-label="업무 종료 일시" disabled={editLocked} value={localDateTime(edit.endAt)} onChange={e=>{change('endAt',offsetDateTime(e.target.value));change('dueDate',e.target.value.slice(0,10));}}/></label><label>예상 작업시간 (분)<input type="number" min={0} max={19200} step={15} aria-label="예상 작업시간" disabled={editLocked} value={edit.estimatedMinutes||0} onChange={e=>change('estimatedMinutes',Number(e.target.value))}/></label></div>{!edit.endAt&&edit.dueDate&&<p className="help">기존 기한: {edit.dueDate} · 시작·종료 시각을 지정하거나 AI 방식으로 전환하세요.</p>}</>:<div className="ai-schedule-summary"><p>시작 <strong>{displayDateTime(edit.startAt)}</strong></p><p>종료 <strong>{displayDateTime(edit.endAt)}</strong></p><p>예상 작업시간 <strong>{edit.estimatedMinutes||0}분</strong></p><p className="help">AI 방식은 자동 저장됩니다. 선택 승인 시 누락된 일정을 자동 산정합니다. 점심시간 12:00~13:00은 제외합니다. 위의 ‘AI 일정 설정’에서 업무 전체를 분석하세요. 담당자별 시간과 업무 간 의존관계를 함께 계산합니다.</p></div>}
-                  {!edit.parentDraftId&&childDrafts(edit.id).length>0&&<p className="help">직접 설정은 시작·종료 일시를 동일하게 저장합니다. AI 방식은 하위에도 적용한 뒤 업무별로 일정을 산정합니다.</p>}
                   {!!edit.scheduleReason&&<p className="schedule-reason">{edit.scheduleReason}</p>}
                   {!!edit.dependencyDraftIds?.length&&<div className="schedule-dependencies"><strong>선행 업무</strong>{edit.dependencyDraftIds.map(id=><span key={id}>{meeting.drafts.find(d=>d.id===id)?.summary||id}</span>)}</div>}
                 </section>
@@ -1590,15 +1548,6 @@ function TicketReview({
                     )}
                   </select>
                 </label>
-                {!!edit.parentDraftId&&<label>
-                  상위 티켓
-                  <input
-                    placeholder="연결할 Jira 이슈 키"
-                    value={edit.parentDraftId ? (meeting.drafts.find(d=>d.id===edit.parentDraftId)?.summary||"")+" · "+(edit.parent||"부모 등록 후 자동 연결") : edit.parent || ""}
-                    onChange={(e) => change("parent", e.target.value)}
-                    disabled={editLocked || !!edit.parentDraftId || !!edit.epicKey}
-                  />
-                </label>}
                 <label className="full">
                   라벨 (쉼표 구분)
                   <input
@@ -1674,16 +1623,16 @@ function Results({
   reviewPath?: string;
 }) {
   const jiraSettings = useJiraSettings();
-  const [searchText,setSearchText]=useState(""),[query,setQuery]=useState(""),[status,setStatus]=useState(""),[kind,setKind]=useState("");
-  useEffect(()=>{setSearchText("");setQuery("");setStatus("");setKind("");},[meeting.id]);
+  const [searchText,setSearchText]=useState(""),[query,setQuery]=useState(""),[status,setStatus]=useState("");
+  useEffect(()=>{setSearchText("");setQuery("");setStatus("");},[meeting.id]);
   const pending=(value:string)=>!["PUBLISHED","FAILED"].includes(value);
   const matchesStatus=(value:string)=>!status||(status==="PENDING"?pending(value):value===status);
   const matchesQuery=(value:string)=>value.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
-  const visible=meeting.drafts.filter(d=>matchesStatus(d.status)&&(!kind||(kind==="CHILD"?!!d.parentDraftId:!d.parentDraftId))&&matchesQuery([d.summary,d.projectKey,d.issueKey,d.error,meeting.drafts.find(p=>p.id===d.parentDraftId)?.summary].filter(Boolean).join(" ")));
-  const visibleEpics=(meeting.epics||[]).filter(e=>!kind&&matchesStatus(e.status)&&matchesQuery([e.summary,e.projectKey,e.issueKey,e.error].filter(Boolean).join(" ")));
-  const filtered=!!query.trim()||!!status||!!kind;
+  const visible=meeting.drafts.filter(d=>matchesStatus(d.status)&&matchesQuery([d.summary,d.projectKey,d.issueKey,d.error,meeting.drafts.find(p=>p.id===d.parentDraftId)?.summary].filter(Boolean).join(" ")));
+  const visibleEpics=(meeting.epics||[]).filter(e=>matchesStatus(e.status)&&matchesQuery([e.summary,e.projectKey,e.issueKey,e.error].filter(Boolean).join(" ")));
+  const filtered=!!query.trim()||!!status;
   const statFilters=["PUBLISHED","FAILED","PENDING"];
-  function resetFilters(){setSearchText("");setQuery("");setStatus("");setKind("");}
+  function resetFilters(){setSearchText("");setQuery("");setStatus("");}
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   async function retry(id: string) {
@@ -1714,16 +1663,16 @@ function Results({
       </div>
       <ErrorBox error={error} />
       <section className="panel results-search-panel" aria-label="등록 결과 검색">
-        <div className="results-search-heading"><div><h3>등록 결과 찾기</h3><p>티켓 제목, 상위 업무명, 프로젝트, 이슈 키 또는 오류 내용으로 검색하세요.</p></div><span className="results-count">{visible.length} / {meeting.drafts.length}개 티켓</span></div>
+        <div className="results-search-heading"><div><h3>등록 결과 찾기</h3><p>티켓 제목, 프로젝트, 이슈 키 또는 오류 내용으로 검색하세요.</p></div><span className="results-count">{visible.length} / {meeting.drafts.length}개 티켓</span></div>
         <form className="results-search-form" onSubmit={e=>{e.preventDefault();setQuery(searchText);}}>
-          <div className="results-search-filters"><select aria-label="등록 결과 상태" value={status} onChange={e=>setStatus(e.target.value)}><option value="">전체 상태</option><option value="PUBLISHED">등록 완료</option><option value="FAILED">등록 실패</option><option value="PENDING">미등록·미확정 전체</option><option value="DRAFT">초안</option><option value="APPROVED">승인됨</option><option value="PUBLISHING">등록 중</option><option value="UNKNOWN">결과 확인 필요</option></select><select aria-label="등록 결과 구분" value={kind} onChange={e=>setKind(e.target.value)}><option value="">전체 구성</option><option value="PARENT">상위업무</option><option value="CHILD">하위업무</option></select></div>
+          <div className="results-search-filters"><select aria-label="등록 결과 상태" value={status} onChange={e=>setStatus(e.target.value)}><option value="">전체 상태</option><option value="PUBLISHED">등록 완료</option><option value="FAILED">등록 실패</option><option value="PENDING">미등록·미확정 전체</option><option value="DRAFT">초안</option><option value="APPROVED">승인됨</option><option value="PUBLISHING">등록 중</option><option value="UNKNOWN">결과 확인 필요</option></select></div>
           <input aria-label="등록 결과 검색어" placeholder="티켓 제목, 이슈 키, 오류 내용 검색" value={searchText} onChange={e=>setSearchText(e.target.value)}/>
           {(filtered||searchText)&&<button type="button" onClick={resetFilters}>초기화</button>}
           <button className="primary" type="submit"><Search size={16}/>검색</button>
         </form>
-        {filtered&&<p className="results-filter-note" role="status">{query.trim()&&<>‘{query.trim()}’ 검색 · </>}{status&&`${status==="PENDING"?"미등록·미확정":statusName[status]||status} · `}{kind&&`${kind==="CHILD"?"하위업무":"상위업무"} · `}티켓 {visible.length}건{!kind&&meeting.epics?.length?` · 에픽 ${visibleEpics.length}건`:""}</p>}
+        {filtered&&<p className="results-filter-note" role="status">{query.trim()&&<>‘{query.trim()}’ 검색 · </>}{status&&`${status==="PENDING"?"미등록·미확정":statusName[status]||status} · `}티켓 {visible.length}건{meeting.epics?.length?` · 에픽 ${visibleEpics.length}건`:""}</p>}
       </section>
-      {!!meeting.epics?.length&&!kind&&<div className="panel padded epic-summary"><strong>에픽 등록 결과 <small>{visibleEpics.length}건</small></strong>{visibleEpics.map(e=><div className="epic-result" key={e.id}><span className="project-chip">{e.projectKey}</span><span>{e.summary}</span><Badge status={e.status}/>{e.issueUrl?<a href={e.issueUrl} target="_blank" rel="noopener noreferrer">에픽 {e.issueKey} ↗</a>:<span>에픽 {e.issueKey||"결과 확인 필요"}</span>}{e.error&&<span className="warning">{e.error}</span>}</div>)}{!visibleEpics.length&&<p className="help">검색 조건에 맞는 에픽이 없습니다.</p>}</div>}
+      {!!meeting.epics?.length&&<div className="panel padded epic-summary"><strong>에픽 등록 결과 <small>{visibleEpics.length}건</small></strong>{visibleEpics.map(e=><div className="epic-result" key={e.id}><span className="project-chip">{e.projectKey}</span><span>{e.summary}</span><Badge status={e.status}/>{e.issueUrl?<a href={e.issueUrl} target="_blank" rel="noopener noreferrer">에픽 {e.issueKey} ↗</a>:<span>에픽 {e.issueKey||"결과 확인 필요"}</span>}{e.error&&<span className="warning">{e.error}</span>}</div>)}{!visibleEpics.length&&<p className="help">검색 조건에 맞는 에픽이 없습니다.</p>}</div>}
       <div className="result-stats">
         {[
           [
@@ -1762,7 +1711,7 @@ function Results({
           <tbody>
             {visible.map((d) => (
               <tr key={d.id}>
-                <td><span className="result-kind">{d.parentDraftId?"하위업무":"상위업무"}</span><span className="result-title">{d.summary}</span></td>
+                <td><span className="result-kind">업무</span><span className="result-title">{d.summary}</span></td>
                 <td>
                   <Badge status={d.status} />
                 </td>

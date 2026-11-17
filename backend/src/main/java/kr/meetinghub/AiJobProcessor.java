@@ -56,7 +56,7 @@ public class AiJobProcessor {
                     case "GENERATING_MINUTES"->ai.minutes(input.meeting().title,input.content().segments);
                     case "ANALYZING"->ai.analyze(input.content().segments);
                     case "GENERATING_TICKETS"->input.selected().isEmpty()?List.<TicketProposal>of():ai.tickets(input.meeting().title,input.content().minutes,input.content().segments,input.selected(),
-                        input.draft()==null?"":(input.hierarchyExists()?"기존 계층이 있습니다. 이번에는 이 티켓만 정리하고 subtasks는 반드시 빈 목록으로 반환하세요.\n":"")+"기존 초안 제목: "+input.draft().summary+"\n기존 설명:\n"+input.draft().description);
+                        input.draft()==null?"":"하위업무를 생성하지 말고 subtasks는 반드시 빈 목록으로 반환하세요. 세부 내용은 작업의 체크리스트에 작성하세요.\n기존 초안 제목: "+input.draft().summary+"\n기존 설명:\n"+input.draft().description);
                     default->throw new IllegalArgumentException("알 수 없는 분석 단계입니다.");
                 };
                 if(persist(id,stage,input,computed,ai,index+1,stages.size()))return;
@@ -101,7 +101,7 @@ public class AiJobProcessor {
                     c.archivedItems=previous.stream().filter(i->referenced.contains(i.id())&&!currentIds.contains(i.id())).toList();
                     c.items=stable;c.analysisMode=ai.mode();c.analysisModel=ai.model();c.analysisVersion++;
                 }
-                case "GENERATING_TICKETS"->service.applyDraftProposals(m,c,(List<TicketProposal>)computed,ai.mode(),ai.model(),input.draft()==null?null:input.draft().id,input.draft()==null?-1:input.draft().version);
+                case "GENERATING_TICKETS"->service.applyFlatDraftProposals(m,c,(List<TicketProposal>)computed,ai.mode(),ai.model(),input.draft()==null?null:input.draft().id,input.draft()==null?-1:input.draft().version);
                 default->throw new IllegalArgumentException("알 수 없는 분석 단계입니다.");
             }
             j.nextStageIndex=nextStage;j.pausedTranscriptRevision=c.transcriptRevision;

@@ -116,6 +116,7 @@ public final class Domain {
         public String parentDraftId="";
         public String epicKey="";
         public String epicId="";
+        @com.fasterxml.jackson.annotation.JsonIgnore @Column(columnDefinition="text") public String flatHierarchyBackup="";
         public String registrationMode="NEW",existingIssueKey="";
         @ElementCollection(fetch=FetchType.EAGER) public Set<String> labels = new LinkedHashSet<>();
         @ElementCollection(fetch=FetchType.EAGER) public Set<String> analysisItemIds = new LinkedHashSet<>();

@@ -149,6 +149,16 @@ public class MeetingService {
         var items=new LinkedHashMap<String,Item>();c.archivedItems.forEach(i->items.put(i.id(),i));c.items.forEach(i->items.put(i.id(),i));return new ArrayList<>(items.values());
     }
     List<Draft> applyDraftProposals(Meeting m,Content c,List<TicketProposal> proposals,String mode,String model,String targetDraftId,long expectedVersion) {
+        return applyDraftProposals(m,c,proposals,mode,model,targetDraftId,expectedVersion,true);
+    }
+    List<Draft> applyFlatDraftProposals(Meeting m,Content c,List<TicketProposal> proposals,String mode,String model,String targetDraftId,long expectedVersion) {
+        return applyDraftProposals(m,c,proposals.stream().map(MeetingService::flatProposal).toList(),mode,model,targetDraftId,expectedVersion,false);
+    }
+    static TicketProposal flatProposal(TicketProposal p){
+        var rows=new ArrayList<TicketProposal>();rows.add(p);p.subtasks().forEach(child->rows.add(flatProposal(child)));
+        return new TicketProposal(p.analysisItemIds(),p.summary(),p.background(),rows.stream().flatMap(r->r.tasks().stream()).distinct().toList(),rows.stream().flatMap(r->r.checks().stream()).distinct().toList(),rows.stream().flatMap(r->r.acceptanceCriteria().stream()).distinct().toList(),rows.stream().flatMap(r->r.dependencies().stream()).distinct().toList(),rows.stream().flatMap(r->r.reviewNotes().stream()).distinct().toList(),List.of(),p.aiRecommended());
+    }
+    private List<Draft> applyDraftProposals(Meeting m,Content c,List<TicketProposal> proposals,String mode,String model,String targetDraftId,long expectedVersion,boolean hierarchy) {
         var existing=drafts.findByMeetingId(m.id);var all=allItems(c);var valid=all.stream().map(Item::id).toList();
         if(targetDraftId!=null) {
             require(proposals.size()==1,"한 티켓의 AI 검토 결과가 필요합니다.");
@@ -159,7 +169,7 @@ public class MeetingService {
             require(p.subtasks().isEmpty()||(Objects.toString(d.parentDraftId,"").isBlank()&&d.parent.isBlank()&&children(d.id).isEmpty()),"기존 하위 티켓은 각각 검토하세요. 이미 계층이 있는 티켓에 하위를 다시 생성할 수 없습니다.");
             d.summary=Objects.toString(d.parentDraftId,"").isBlank()?TicketWording.normalize(TimeReferences.without(p.summary())):SubtaskTitles.compact(p.summary());d.description=TicketDescriptions.normalize(proposalDescription(m.id,p,all,mode,model,!Objects.toString(d.parentDraftId,"").isBlank()),!Objects.toString(d.parentDraftId,"").isBlank(),all,d.analysisItemIds,c.segments);d.status="DRAFT";d.approvedTarget=null;d.publishTarget=null;d.error=null;
             tagRecommendation(d,p,mode);d.generationMode=mode;d.generationModel=model;d.analysisVersion=c.analysisVersion;drafts.save(d);audits.save(new Audit("DRAFT_AI_REVIEWED",d.id));
-            saveSubtasks(m,c,d,p,all,mode,model);
+            if(hierarchy)saveSubtasks(m,c,d,p,all,mode,model);
         } else {
             var covered=new HashSet<String>();existing.forEach(d->covered.addAll(d.analysisItemIds));
             for(var p:proposals) {
@@ -168,9 +178,9 @@ public class MeetingService {
                 var d=new Draft();d.meetingId=m.id;d.projectKey=c.projectKey;d.summary=TicketWording.normalize(TimeReferences.without(p.summary()));d.analysisItemIds.addAll(p.analysisItemIds());
                 d.description=TicketDescriptions.normalize(proposalDescription(m.id,p,all,mode,model),false,all,d.analysisItemIds,c.segments);d.generationMode=mode;d.generationModel=model;d.analysisVersion=c.analysisVersion;
                 tagRecommendation(d,p,mode);d.duplicateSuspected=existing.stream().anyMatch(old->similar(old.summary,d.summary));drafts.save(d);existing.add(d);covered.addAll(p.analysisItemIds());
-                saveSubtasks(m,c,d,p,all,mode,model);
+                if(hierarchy)saveSubtasks(m,c,d,p,all,mode,model);
             }
-            if(!mode.equals("mock"))fillParagraphChildren(m,c);
+            if(hierarchy&&!mode.equals("mock"))fillParagraphChildren(m,c);
             audits.save(new Audit(!mode.equals("mock")?"AI_DRAFTS_GENERATED":"MOCK_DRAFTS_GENERATED",m.id));
         }
         return drafts.findByMeetingId(m.id);

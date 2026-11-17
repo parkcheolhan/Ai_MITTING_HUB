@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 
 function fixture(){
  const draft=(id:string,title:string,parentDraftId='')=>({id,meetingId:'schedule-ui',projectKey:'TEST',issueType:parentDraftId?'Sub-task':'Task',summary:title,description:'작업과 검증',assignee:'',assigneeName:'',priority:'Medium',dueDate:'',startAt:'',endAt:'',estimatedMinutes:0,scheduleMode:'MANUAL',scheduleReason:'',dependencyDraftIds:[] as string[],labels:[],parent:'',parentDraftId,analysisItemIds:[],status:'DRAFT',issueKey:null,issueUrl:null,publishedAt:null,error:null,version:0,registrationMode:'NEW'});
- return {id:'schedule-ui',title:'일정 UI 검증',status:'REVIEW_PENDING',createdAt:'2026-11-10T00:00:00Z',drafts:[draft('root','보안 개선'),draft('a','암호화 구현','root'),draft('b','결과 검증','root')],jobs:[],epics:[],content:{occurredAt:'',projectKey:'TEST',participants:[],memo:'',source:'TEXT',language:'ko',template:'일반',diarization:false,segments:[],minutes:null,items:[],assets:[]}};
+ return {id:'schedule-ui',title:'일정 UI 검증',status:'REVIEW_PENDING',createdAt:'2026-11-10T00:00:00Z',drafts:[draft('root','보안 개선'),draft('a','암호화 구현'),draft('b','결과 검증')],jobs:[],epics:[],content:{occurredAt:'',projectKey:'TEST',participants:[],memo:'',source:'TEXT',language:'ko',template:'일반',diarization:false,segments:[],minutes:null,items:[],assets:[]}};
 }
 
 test('approval automatically calculates missing AI dates before approving and preserves completed dates',async({page})=>{
@@ -22,7 +22,7 @@ test('approval automatically calculates missing AI dates before approving and pr
  await page.getByRole('button',{name:'선택 승인',exact:true}).click();
  await expect.poll(()=>calls).toEqual(['schedule','approve','approve']);
 });
-test('searches project assignees, applies root assignee to children and schedules cross-person work',async({page})=>{
+test('searches project assignees, assigns independent tasks and schedules cross-person work',async({page})=>{
  const meeting=fixture();let scheduleRequest:any;const searches:string[]=[];
  await page.route('**/api/**',route=>{
   const url=new URL(route.request().url()),path=url.pathname;
@@ -36,9 +36,9 @@ test('searches project assignees, applies root assignee to children and schedule
  await expect(page.locator('.ticket-editor').getByLabel('프로젝트',{exact:true})).toHaveCount(0);
  await expect(page.locator('.ticket-editor').getByLabel('상위 티켓',{exact:true})).toHaveCount(0);
  const search=page.getByRole('combobox',{name:'담당자 검색'});await search.fill('민수');await page.getByRole('option',{name:/김민수/}).click();
- await expect(page.getByRole('button',{name:'이 담당자를 하위업무 전체에 적용'})).toBeEnabled();
+ await expect(page.getByRole('button',{name:'이 담당자를 하위업무 전체에 적용'})).toHaveCount(0);
  await expect(page.getByRole('button',{name:'초안 저장',exact:true})).toBeDisabled();
- await page.getByRole('button',{name:'이 담당자를 하위업무 전체에 적용'}).click();
+ meeting.drafts[1].assignee='account-a';meeting.drafts[1].assigneeName='김민수';meeting.drafts[2].assignee='account-a';
  await expect.poll(()=>meeting.drafts[2].assignee).toBe('account-a');expect(searches).toContain('민수');
  meeting.drafts[2].assignee='account-b';meeting.drafts[2].assigneeName='이지은';meeting.drafts[2].version++;
  await page.reload();await page.getByRole('button',{name:'AI 일정 설정',exact:true}).click();
@@ -47,10 +47,10 @@ test('searches project assignees, applies root assignee to children and schedule
  await page.getByRole('button',{name:'업무 전체 AI 일정 자동 설정'}).click();
  await expect.poll(()=>scheduleRequest?.availability?.length).toBe(2);
  expect(scheduleRequest.availability.find((a:any)=>a.assignee==='account-b').availableAt).toContain('2027-03-01T11:00');
- await page.getByText('담당자별 배정 결과 · 2개 실행 업무',{exact:true}).click();await expect(page.locator('.schedule-results')).toContainText('이지은');
- await page.locator('.candidate').first().locator('button[aria-expanded]').click();await page.locator('.subtask-candidate').last().getByRole('button').click();
+ await page.getByText('담당자별 배정 결과 · 3개 실행 업무',{exact:true}).click();await expect(page.locator('.schedule-results')).toContainText('이지은');
+ await page.locator('.candidate').last().getByRole('button').click();
  await expect(page.getByLabel('기한 설정 방식')).toHaveValue('AI');await expect(page.locator('.ticket-schedule')).toContainText('구현 후 결과 검증');
- await expect(page.locator('.schedule-dependencies')).toContainText('암호화 구현');await expect(page.getByLabel('상위 티켓',{exact:true})).toBeDisabled();
+ await expect(page.locator('.schedule-dependencies')).toContainText('암호화 구현');await expect(page.getByLabel('상위 티켓',{exact:true})).toHaveCount(0);
  await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
  await page.screenshot({path:'test-results/jira-scheduling-mobile.png'});
 });

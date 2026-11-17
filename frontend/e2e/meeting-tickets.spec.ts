@@ -32,28 +32,28 @@ test('opens meeting management instead of a duplicate ticket dashboard',async ({
   await page.setViewportSize({width:390,height:844});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
-test('shows AI recommendation tags on child candidates and their review details',async ({page}) => {
+test('shows AI recommendation tags on independent tasks and their review details',async ({page}) => {
   const m=meeting('recommended','추천 검증',true);
-  const child={...m.drafts[0],id:'recommended-child',parentDraftId:m.drafts[0].id,issueType:'Sub-task',summary:'세션 만료 회귀 검증',labels:['ai-recommended'],description:'AI 추천 · 로그인 수정 후 회귀 위험을 확인하기 위한 제안입니다.'};
+  const child={...m.drafts[0],id:'recommended-child',parentDraftId:'',issueType:'Task',summary:'세션 만료 회귀 검증',labels:['ai-recommended'],description:'AI 추천 · 로그인 수정 후 회귀 위험을 확인하기 위한 제안입니다.'};
   await page.route('**/api/meetings/recommended',route=>route.fulfill({json:{...m,drafts:[...m.drafts,child]}}));
   await page.goto('/meetings/recommended/tickets');
   await expect(page.locator('.candidate').first().locator('.ai-recommendation-tag')).toHaveCount(0);
-  await page.locator('.candidate').first().locator('button[aria-expanded]').click();
-  const row=page.locator('.subtask-candidate');
+
+  const row=page.locator('.candidate').nth(1);
   await expect(row.locator('.ai-recommendation-tag')).toHaveText('AI 추천');
   await row.getByRole('button',{name:/세션 만료 회귀 검증/}).click();
   await expect(page.locator('.ticket-editor .ai-recommendation-tag')).toHaveText('AI 추천');
 });
 test('shows automatically generated paragraph candidates without a manual generation action',async ({page}) => {
   const m=meeting('paragraph','중단락 업무',true);
-  const child={...m.drafts[0],id:'small-paragraph',parentDraftId:m.drafts[0].id,issueType:'Sub-task',summary:'소단락 작업 수행'};
+  const child={...m.drafts[0],id:'small-paragraph',parentDraftId:'',issueType:'Task',summary:'소단락 작업 수행'};
   await page.route('**/api/meetings/paragraph',route=>route.fulfill({json:{...m,drafts:[...m.drafts,child]}}));
   await page.goto('/meetings/paragraph/tickets');
   await expect(page.getByRole('button',{name:/후보 추가/})).toHaveCount(0);
   await expect(page.getByRole('button',{name:'중단락·소단락으로 후보 구성',exact:true})).toHaveCount(0);
-  await page.getByRole('button',{name:'하위 후보 모두 펼치기',exact:true}).click();
-  await expect(page.locator('.subtask-candidate')).toContainText('소단락 작업 수행');
-  await expect(page.locator('.candidate-toolbar').first()).toContainText('상위 1개 · 하위 1개');
+  await expect(page.getByRole('button',{name:'하위 후보 모두 펼치기',exact:true})).toHaveCount(0);
+  await expect(page.locator('.candidate-panel')).toContainText('소단락 작업 수행');
+  await expect(page.locator('.candidate-toolbar').first()).toContainText('업무 2개');
   await page.route('**/api/settings/ai',route=>route.fulfill({json:{mode:'codex',configured:true}}));
   await page.goto('/meetings/paragraph?tab=analysis');
   await expect(page.getByRole('button',{name:'AI Jira 초안 생성',exact:true})).toHaveCount(0);

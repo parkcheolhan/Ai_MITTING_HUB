@@ -62,7 +62,7 @@ export default function TicketsPage({review, results}: {
         <ol className="ticket-preparation">
           <li><div><strong>회의록 확인</strong><p>{meeting.content.minutes ? "작성된 회의록을 검토하세요." : "회의록 생성이 필요합니다."}</p></div><Link className="button" to={`/meetings/${id}?tab=minutes`}>회의록 확인</Link></li>
           <li><div><strong>업무 분석 확인</strong><p>분석된 업무 {meeting.content.items.length}건 · 원문과 작업 범위를 검토하세요.</p></div><Link className="button" to={`/meetings/${id}?tab=analysis`}>업무 분석 확인</Link></li>
-          <li><div><strong>티켓 후보 준비</strong><p>{meeting.drafts.length ? `이 회의의 티켓 후보 ${meeting.drafts.length}건을 준비했습니다.` : "실제 AI 업무 분석을 실행하면 상위·하위 후보까지 자동 생성됩니다."}</p></div><Link className="button" to={`/meetings/${id}?tab=analysis`}>업무 분석으로</Link></li>
+          <li><div><strong>티켓 후보 준비</strong><p>{meeting.drafts.length ? `이 회의의 티켓 후보 ${meeting.drafts.length}건을 준비했습니다.` : "실제 AI 업무 분석을 실행하면 업무 후보를 자동 생성됩니다."}</p></div><Link className="button" to={`/meetings/${id}?tab=analysis`}>업무 분석으로</Link></li>
         </ol>
         <div className="form-actions"><button className="primary" onClick={() => go(2)} disabled={!meeting.drafts.length || !!activeJob(meeting)}>다음: 티켓 검토·승인</button></div>
       </div>}

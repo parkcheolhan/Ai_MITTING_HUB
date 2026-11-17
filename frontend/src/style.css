@@ -1765,6 +1765,11 @@ dd {
 .epic-placement { display:flex; align-items:center; gap:8px; justify-content:space-between; padding:8px 10px; background:#edf4ef; }
 .epic-placement > span { font-size:10px; color:#526b5b; white-space:nowrap; }
 .epic-placement select { min-width:0; width:65%; font-size:11px; padding:6px; }
+.epic-placement .task-menu-trigger { padding:2px 8px; min-width:30px; font-size:19px; line-height:1.2; background:transparent; border-color:transparent; }
+.task-context-menu { position:fixed; z-index:10000; width:190px; padding:6px; border:1px solid #ccd7cf; border-radius:9px; background:white; box-shadow:0 8px 28px #152f2233; }
+.task-context-menu button { display:block; width:100%; padding:12px; border:0; text-align:left; color:#a3342b; background:white; }
+.task-context-menu button:hover { background:#fcf0ee; }
+.task-context-menu button:disabled { color:#7b8780; background:#f4f6f4; }
 .epic-task-group .candidate { border-radius:0; }
 .epic-drop-placeholder { color:var(--muted); font-size:12px; text-align:center; padding:16px 6px; margin:0; line-height:1.6; }
 .epic-board-notice { background:#e9f5ed; padding:12px; border-radius:7px; font-size:12px; line-height:1.7; }

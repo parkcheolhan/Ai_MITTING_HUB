@@ -86,14 +86,14 @@ class AiJobWorkflowTest {
         finally{ai.release.countDown();}
         assertThat(terminal(job).status).isEqualTo("CANCELLED");assertThat(service.get(m.id()).drafts()).isEmpty();
     }
-    @Test void analysisAutomaticallyRunsAiTicketDesignAndCreatesHierarchyWithoutAnotherRequest(){
+    @Test void analysisAutomaticallyCreatesIndependentTasksWithoutAnotherRequest(){
         var m=created();complete(worker.start(m.id(),"ANALYZE"));
-        var result=service.get(m.id());assertThat(result.drafts()).hasSize(2);
+        var result=service.get(m.id());assertThat(result.drafts()).hasSize(1);
         var parent=result.drafts().stream().filter(d->d.parentDraftId.isBlank()).findFirst().orElseThrow();
         assertThat(parent.summary).isEqualTo("AI가 정리한 환경 검증");
-        assertThat(service.children(parent.id)).hasSize(1);
-        assertThat(result.drafts()).allMatch(d->d.status.equals("DRAFT")&&d.issueKey==null);
-        complete(worker.start(m.id(),"ANALYZE"));assertThat(service.get(m.id()).drafts()).hasSize(2);
+        assertThat(service.children(parent.id)).isEmpty();
+        assertThat(result.drafts()).allMatch(d->d.status.equals("DRAFT")&&d.issueKey==null&&d.parentDraftId.isBlank()&&d.issueType.equals("Task"));
+        complete(worker.start(m.id(),"ANALYZE"));assertThat(service.get(m.id()).drafts()).hasSize(1);
     }
     @Test void batchTimingUpdatesTranscriptAndEvidenceWithoutChangingText() {
         var m=analyzed();var original=m.content().segments;
@@ -140,7 +140,7 @@ class AiJobWorkflowTest {
         assertThat(reviewed.status).isEqualTo("DRAFT");assertThat(reviewed.approvedTarget).isNull();
         assertThat(reviewed.summary).isEqualTo("AI가 재검토한 환경 검증");assertThat(reviewed.projectKey).isEqualTo(d.projectKey);
         assertThat(reviewed.assignee).isEqualTo("account-123");assertThat(reviewed.dueDate).isEqualTo("2026-11-01");assertThat(reviewed.labels).contains("reviewed");
-        complete(worker.start(m.id(),"TICKETS"));assertThat(service.get(m.id()).drafts()).hasSize(2);
+        complete(worker.start(m.id(),"TICKETS"));assertThat(service.get(m.id()).drafts()).hasSize(1);
     }
     @Test void invalidAiEvidenceFailsWithoutReplacingPreviousAnalysis() {
         var m=analyzed();ai.invalidEvidence=true;var job=terminal(worker.start(m.id(),"ANALYZE"));

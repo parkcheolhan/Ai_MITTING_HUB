@@ -8,8 +8,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @Component
 public class StartupRecovery implements ApplicationRunner {
-    final MeetingService service;final TransactionTemplate tx;final LegacyExampleCleanup cleanup;
-    StartupRecovery(MeetingService service,TransactionTemplate tx,LegacyExampleCleanup cleanup){this.service=service;this.tx=tx;this.cleanup=cleanup;}
+    final MeetingService service;final TransactionTemplate tx;final LegacyExampleCleanup cleanup;final FlatTickets flatTickets;
+    StartupRecovery(MeetingService service,TransactionTemplate tx,LegacyExampleCleanup cleanup,FlatTickets flatTickets){this.service=service;this.tx=tx;this.cleanup=cleanup;this.flatTickets=flatTickets;}
     public void run(ApplicationArguments args){
         cleanup.run();
         tx.executeWithoutResult(s->{
@@ -22,5 +22,6 @@ public class StartupRecovery implements ApplicationRunner {
                 var m=service.lock(j.meetingId);m.status="FAILED";service.meetings().save(m);
             });
         });
+        service.meetings().findAll().forEach(m->flatTickets.prepare(m.id));
     }
 }

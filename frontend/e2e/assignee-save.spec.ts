@@ -25,7 +25,7 @@ test('assignee-only selection saves immediately and leaves ticket navigation and
  await choose(page);
  await expect(page.locator('.ticket-editor-header')).toContainText('담당자를 저장했습니다.');
  expect(state.puts).toHaveLength(1);expect(state.puts[0].assignee).toBe('minsu');
- await expect(page.getByRole('button',{name:'이 담당자를 하위업무 전체에 적용'})).toBeEnabled();
+ await expect(page.getByRole('button',{name:'이 담당자를 하위업무 전체에 적용'})).toHaveCount(0);
  await expect(page.getByRole('button',{name:'변경사항 저장',exact:true})).toHaveCount(0);
  const reads=state.reads;await expect.poll(()=>state.reads).toBeGreaterThan(reads);
  await expect(page.getByRole('combobox',{name:'담당자 검색'})).toHaveValue('김민수');
@@ -42,7 +42,7 @@ test('keeps other edits unsaved and exposes sticky save controls after assignee 
  await expect(save).toBeInViewport();
  await save.click();await expect(page.locator('.ticket-editor-header')).toContainText('변경사항을 저장했습니다.');
  expect(state.puts).toHaveLength(1);expect(state.puts[0]).toMatchObject({summary:'함께 저장할 제목',assignee:'minsu'});
- await expect(page.getByRole('button',{name:'이 담당자를 하위업무 전체에 적용'})).toBeEnabled();
+ await expect(page.getByRole('button',{name:'이 담당자를 하위업무 전체에 적용'})).toHaveCount(0);
  await page.setViewportSize({width:390,height:844});await page.getByLabel('제목',{exact:true}).fill('모바일 편집');await page.evaluate(()=>window.scrollTo({top:document.documentElement.scrollHeight,behavior:'instant'}));await page.locator('.ticket-editor').evaluate(el=>el.scrollTop=el.scrollHeight);await expect(save).toBeInViewport();expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);await page.screenshot({path:'test-results/assignee-save-mobile.png'});
 });
 

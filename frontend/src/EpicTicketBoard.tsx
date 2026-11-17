@@ -1,5 +1,6 @@
 import {useEffect,useRef,useState,type ReactNode,type DragEvent} from 'react';
 import {api} from './api';
+import {createPortal} from 'react-dom';
 import {statusName,type Draft,type Meeting,type MeetingEpic} from './types';
 
 type JiraEpic={key:string;projectKey:string;summary:string;status:string;issueUrl:string|null};
@@ -14,11 +15,28 @@ export default function EpicTicketBoard({meeting,roots,renderRoot,disabled,onBus
   const [results,setResults]=useState<JiraEpic[]>([]),[cursor,setCursor]=useState(''),[searchQuery,setSearchQuery]=useState('');
   const [searching,setSearching]=useState(false),[mutating,setMutating]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const [newTitle,setNewTitle]=useState(''),[dragging,setDragging]=useState(''),[over,setOver]=useState<string|null>(null),[added,setAdded]=useState('');
+  const [menu,setMenu]=useState<{draft:Draft;x:number;y:number}|null>(null);
+  const menuElement=useRef<HTMLDivElement>(null),menuButton=useRef<HTMLButtonElement>(null),menuOpener=useRef<HTMLElement|null>(null);
   const host=useRef<HTMLDivElement>(null),searchRequest=useRef(0),alive=useRef(true),dragId=useRef('');
   const locked=disabled||mutating;
   useEffect(()=>{alive.current=true;return()=>{alive.current=false;searchRequest.current++;};},[]);
   useEffect(()=>{if(added){const box=host.current?.querySelector<HTMLElement>(`[data-epic-id="${added}"]`);if(box){box.scrollIntoView({block:'nearest',behavior:'instant'});setAdded('');}}},[added,meeting.epics]);
-  function canMove(d:Draft){return !locked&&movableTicket(d)&&meeting.drafts.filter(child=>child.parentDraftId===d.id).every(movableTicket);}
+  function canMove(d:Draft){return !locked&&movableTicket(d);}
+  function closeMenu(){setMenu(null);menuOpener.current?.focus();}
+  useEffect(()=>{
+    if(!menu)return;
+    menuButton.current?.focus({preventScroll:true});
+    const outside=(event:PointerEvent)=>{if(!menuElement.current?.contains(event.target as Node))setMenu(null);};
+    const keyboard=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();closeMenu();}};
+    const dismiss=()=>setMenu(null);
+    document.addEventListener('pointerdown',outside);document.addEventListener('keydown',keyboard);window.addEventListener('resize',dismiss);window.addEventListener('wheel',dismiss,{passive:true});window.addEventListener('touchmove',dismiss,{passive:true});
+    return()=>{document.removeEventListener('pointerdown',outside);document.removeEventListener('keydown',keyboard);window.removeEventListener('resize',dismiss);window.removeEventListener('wheel',dismiss);window.removeEventListener('touchmove',dismiss);};
+  },[menu]);
+  function openMenu(draft:Draft,x:number,y:number,opener:HTMLElement){menuOpener.current=opener;setMenu({draft,x:Math.max(8,Math.min(x,innerWidth-208)),y:Math.max(8,Math.min(y,innerHeight-110))});}
+  async function remove(draft:Draft){
+    setMenu(null);
+    await perform(async()=>{await api(`/ticket-drafts/${draft.id}?version=${draft.version}`,'DELETE');setNotice(`${draft.summary} 업무를 삭제했습니다.`);});
+  }
   async function search(more=false){
     const request=++searchRequest.current,term=more?searchQuery:query.trim();setSearching(true);setError('');
     try{
@@ -44,7 +62,7 @@ export default function EpicTicketBoard({meeting,roots,renderRoot,disabled,onBus
     if(!canMove(draft)||assignedEpicId(draft,epics)===epicId)return;
     await perform(async()=>{
       await api(`/ticket-drafts/${draft.id}/epic`,'PUT',{epicId,version});
-      setNotice(`${draft.summary} 업무와 하위업무를 ${epics.find(e=>e.id===epicId)?.summary||'미배치 목록'}${epicId?' 에픽으로':'으로'} 이동했습니다. 다시 승인한 뒤 등록하세요.`);
+      setNotice(`${draft.summary} 업무를 ${epics.find(e=>e.id===epicId)?.summary||'미배치 목록'}${epicId?' 에픽으로':'으로'} 이동했습니다. 다시 승인한 뒤 등록하세요.`);
     });
   }
   function start(e:DragEvent,draft:Draft){
@@ -64,20 +82,21 @@ export default function EpicTicketBoard({meeting,roots,renderRoot,disabled,onBus
       <div className="epic-box-heading"><div><span className="eyebrow">{epic?'EPIC':'UNASSIGNED'} · 업무 {rows.length}개</span><h3>{epic?.summary||'미배치 업무'}</h3>{epic&&<p>{epic.issueUrl?<a href={epic.issueUrl} target="_blank" rel="noopener noreferrer">{epic.issueKey} ↗</a>:epic.issueKey||'등록 전 에픽'} · {epic.external?'기존 에픽':epic.status==='PENDING'?'등록 대기':statusName[epic.status]||'상태 확인'}</p>}</div></div>
       {epic?.currentTarget===false&&<p className="warning">현재 연결한 Jira 대상과 다릅니다. 에픽을 다시 조회하세요.</p>}
       {epic?.error&&<p className="error">{epic.error}</p>}
-      {rows.map(d=><div key={d.id} className={'epic-task-group '+(dragging===d.id?'dragging':'')} draggable={canMove(d)} onDragStart={e=>start(e,d)} onDragEnd={()=>{dragId.current='';setDragging('');setOver(null);}} data-draft-id={d.id}>
-        <div className="epic-placement"><span draggable={canMove(d)} aria-label={`${d.summary} 이동 핸들`} title="업무와 하위업무를 함께 이동합니다">⠿ {canMove(d)?'드래그해 이동':'이동 잠김'}</span><select aria-label={`${d.summary} 에픽 이동`} value={assignedEpicId(d,epics)} disabled={!canMove(d)} onChange={e=>void move(d,e.target.value)}><option value="">미배치</option>{epics.map(item=><option key={item.id} value={item.id} disabled={item.currentTarget===false||!['PENDING','FAILED','PUBLISHED'].includes(item.status)}>{item.issueKey?item.issueKey+' · ':''}{item.summary}</option>)}</select></div>
+      {rows.map(d=><div key={d.id} className={'epic-task-group '+(dragging===d.id?'dragging':'')} draggable={canMove(d)} onDragStart={e=>start(e,d)} onDragEnd={()=>{dragId.current='';setDragging('');setOver(null);}} onContextMenu={e=>{e.preventDefault();openMenu(d,e.clientX,e.clientY,e.currentTarget);}} onKeyDown={e=>{if(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10')){e.preventDefault();const rect=e.currentTarget.getBoundingClientRect();openMenu(d,rect.left+20,rect.top+30,e.currentTarget);}}} tabIndex={0} data-draft-id={d.id}>
+        <div className="epic-placement"><span draggable={canMove(d)} aria-label={`${d.summary} 이동 핸들`} title="업무 이동">⠿</span><select aria-label={`${d.summary} 에픽 이동`} value={assignedEpicId(d,epics)} disabled={!canMove(d)} onChange={e=>void move(d,e.target.value)}><option value="">미배치</option>{epics.map(item=><option key={item.id} value={item.id} disabled={item.currentTarget===false||!['PENDING','FAILED','PUBLISHED'].includes(item.status)}>{item.issueKey?item.issueKey+' · ':''}{item.summary}</option>)}</select><button type="button" className="task-menu-trigger" aria-label={`${d.summary} 업무 메뉴`} aria-haspopup="menu" onClick={e=>{const rect=e.currentTarget.getBoundingClientRect();openMenu(d,rect.right-190,rect.bottom,e.currentTarget);}}>⋯</button></div>
         {renderRoot(d)}
       </div>)}
-      {!rows.length&&<p className="epic-drop-placeholder">{epic?'업무 티켓을 이곳에 끌어다 놓으세요.':'에픽에 배치하지 않은 업무가 없습니다.'}</p>}
+      {!rows.length&&<p className="epic-drop-placeholder">{epic?'이 에픽에 업무를 배치하세요.':'에픽에 배치하지 않은 업무가 없습니다.'}</p>}
     </section>;
   }
   return <div className="epic-ticket-board" ref={host}>
-    <div className="epic-board-toolbar"><div><strong>에픽별 티켓 배치</strong><p>업무를 이동하면 하위업무도 함께 이동합니다.</p></div><button type="button" disabled={locked} aria-expanded={lookup} onClick={()=>setLookup(v=>!v)}>에픽 조회·추가</button></div>
+    <div className="epic-board-toolbar"><div><strong>에픽별 티켓 배치</strong><p>업무를 원하는 에픽에 배치하세요.</p></div><button type="button" disabled={locked} aria-expanded={lookup} onClick={()=>setLookup(v=>!v)}>에픽 조회·추가</button></div>
     {lookup&&<div className="epic-lookup"><form onSubmit={e=>{e.preventDefault();void search();}}><label>에픽 제목 또는 키<input value={query} maxLength={200} placeholder="제목 또는 PROJ-123" disabled={locked||searching} onChange={e=>setQuery(e.target.value)}/></label><button disabled={locked||searching}>{searching?'조회 중…':'에픽 조회'}</button></form>
       {searched&&<div className="epic-search-results" aria-label="에픽 조회 결과">{results.map(e=><div key={e.key}><div><strong>{e.summary}</strong><small>{e.key} · {e.status}</small></div><button type="button" disabled={locked||epics.some(item=>item.issueKey===e.key&&item.currentTarget!==false)} onClick={()=>void add({issueKey:e.key})}>{epics.some(item=>item.issueKey===e.key&&item.currentTarget!==false)?'추가됨':'박스 추가'}</button></div>)}{!results.length&&<p className="help">검색 조건에 맞는 에픽이 없습니다.</p>}{cursor&&<button type="button" disabled={locked||searching} onClick={()=>void search(true)}>에픽 더 보기</button>}</div>}
       <form className="epic-create" onSubmit={e=>{e.preventDefault();if(newTitle.trim())void add({summary:newTitle.trim()});}}><label>새 에픽 제목<input value={newTitle} maxLength={200} placeholder="새 에픽의 제목을 입력하세요" disabled={locked} onChange={e=>setNewTitle(e.target.value)}/></label><button disabled={locked||!newTitle.trim()}>새 에픽 박스 추가</button><p className="help">새 에픽은 배치한 티켓을 승인·등록할 때 Jira에 생성됩니다.</p></form>
     </div>}
     {error&&<p role="alert" className="error">{error}</p>}{notice&&<p role="status" className="epic-board-notice">{notice}</p>}
     {box()}{epics.map(epic=>box(epic))}
+    {menu&&createPortal(<div ref={menuElement} role="menu" aria-label={`${menu.draft.summary} 업무 메뉴`} className="task-context-menu" style={{left:menu.x,top:menu.y}} onContextMenu={e=>e.preventDefault()}><button ref={menuButton} type="button" role="menuitem" disabled={locked||!['DRAFT','APPROVED','FAILED'].includes(menu.draft.status)||!!menu.draft.issueKey} onClick={()=>void remove(menu.draft)}>업무 삭제</button></div>,document.body)}
   </div>;
 }

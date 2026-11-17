@@ -22,6 +22,7 @@ public class Api {
     public MeetingView create(@Valid @RequestBody CreateMeeting input) { return service.create(input); }
     @GetMapping("/meetings/{id}") public MeetingView get(@PathVariable String id) { return service.get(id); }
     @org.springframework.beans.factory.annotation.Autowired EpicBoard epicBoard;
+    @org.springframework.beans.factory.annotation.Autowired FlatTickets flatTickets;
     @PostMapping("/meetings/{id}/epics") public MeetingView addEpic(@PathVariable String id,@Valid @RequestBody AddEpic input){return epicBoard.add(id,input);}
     @PutMapping("/ticket-drafts/{id}/epic") public List<Draft> moveEpic(@PathVariable String id,@Valid @RequestBody MoveEpic input){return epicBoard.move(id,input);}
     @PostMapping("/meetings/{id}/epics/sync") public List<EpicView> syncEpics(@PathVariable String id){
@@ -56,10 +57,7 @@ public class Api {
     }
     @PostMapping("/meetings/{id}/process") public Job process(@PathVariable String id) { return worker.start(id,"PIPELINE"); }
     @PutMapping("/meetings/{id}/analysis-flow") public MeetingView flow(@PathVariable String id,@Valid @RequestBody AnalysisFlowInput input){return worker.setAdvanceMode(id,input.mode());}
-    @PostMapping("/meetings/{id}/ticket-drafts/structure") public List<Draft> structure(@PathVariable String id){return service.structureCandidates(id);}
     @PostMapping("/meetings/{id}/ticket-drafts/format") public List<Draft> formatDescriptions(@PathVariable String id,@Valid @RequestBody Ids input){return service.formatDescriptions(id,input);}
-    @PostMapping("/meetings/{id}/ticket-drafts/titles") public List<Draft> formatTitles(@PathVariable String id,@Valid @RequestBody Ids input){return service.formatSubtaskTitles(id,input);}
-    @PostMapping("/meetings/{id}/ticket-drafts/consolidate") public List<Draft> consolidate(@PathVariable String id,@Valid @RequestBody Ids input){return service.consolidateSubtasks(id,input);}
     @org.springframework.beans.factory.annotation.Autowired TicketConsolidation consolidation;
     @PostMapping("/meetings/{id}/ticket-drafts/compact") public List<Draft> compact(@PathVariable String id,@Valid @RequestBody CompactPlan input){return consolidation.apply(id,input);}
     @PostMapping("/meetings/{id}/transcribe") public Job transcribe(@PathVariable String id) { return worker.start(id,"TRANSCRIBE"); }
@@ -74,21 +72,15 @@ public class Api {
     @PutMapping("/meetings/{id}/minutes") public Minutes saveMinutes(@PathVariable String id,@RequestBody Minutes minutes) { return service.saveMinutes(id,minutes); }
     @PostMapping("/meetings/{id}/analyze") public Job analyze(@PathVariable String id) { return worker.start(id,"ANALYZE"); }
     @PostMapping("/meetings/{id}/schedule") @ResponseStatus(HttpStatus.ACCEPTED) public Job schedule(@PathVariable String id,@Valid @RequestBody ScheduleRequest input){return worker.schedule(id,input);}
-    @PostMapping("/ticket-drafts/{id}/schedule/children") public List<Draft> applyChildSchedule(@PathVariable String id,@Valid @RequestBody ApplyChildSchedule input){return service.applyChildSchedule(id,input);}
-    @PostMapping("/ticket-drafts/{id}/assignee/children") public List<Draft> assignChildren(@PathVariable String id,@Valid @RequestBody AssignChildren input){
-        var draft=service.drafts().findById(id).orElseThrow(MeetingService::missing);var project=service.get(draft.meetingId).content().projectKey;
-        var user=integration.jira.snapshot().assignableUsers(project,"",input.assignee(),0).users().stream().filter(u->u.accountId().equals(input.assignee())).findFirst().orElseThrow(()->new IllegalArgumentException("해당 프로젝트에 할당 가능한 담당자를 선택하세요."));
-        return service.assignChildren(id,user);
-    }
     @GetMapping("/meetings/{id}/items") public List<Item> items(@PathVariable String id) { return service.get(id).content().items; }
     @PostMapping("/meetings/{id}/ticket-drafts") @ResponseStatus(HttpStatus.ACCEPTED)
     public Job generate(@PathVariable String id) { return worker.start(id,"TICKETS"); }
     @PostMapping("/ticket-drafts/{id}/ai-review") @ResponseStatus(HttpStatus.ACCEPTED)
     public Job review(@PathVariable String id) { return worker.review(id); }
-    @PostMapping("/meetings/{id}/ticket-drafts/manual") public Draft add(@PathVariable String id,@Valid @RequestBody DraftInput input) { return service.addDraft(id,input); }
+    @PostMapping("/meetings/{id}/ticket-drafts/manual") public Draft add(@PathVariable String id,@Valid @RequestBody DraftInput input) { return flatTickets.add(id,input); }
     @GetMapping("/ticket-drafts") public List<Draft> drafts() { return service.drafts().findAll().stream().filter(d->!d.status.equals("CONSOLIDATED")).toList(); }
-    @PutMapping("/ticket-drafts/{id}") public Draft edit(@PathVariable String id,@Valid @RequestBody DraftInput input) { return service.update(id,input); }
-    @DeleteMapping("/ticket-drafts/{id}") public void delete(@PathVariable String id) { service.deleteDraft(id); }
+    @PutMapping("/ticket-drafts/{id}") public Draft edit(@PathVariable String id,@Valid @RequestBody DraftInput input) { return flatTickets.update(id,input); }
+    @DeleteMapping("/ticket-drafts/{id}") public void delete(@PathVariable String id,@RequestParam(required=false) Long version) { flatTickets.delete(id,version); }
     @PostMapping("/ticket-drafts/approve") public List<Draft> approve(@Valid @RequestBody Ids ids) { return service.approve(ids.ids()); }
     @PostMapping("/ticket-drafts/merge") public List<Draft> merge(@Valid @RequestBody Ids ids) { return service.merge(ids.ids()); }
     @PostMapping("/ticket-drafts/{id}/split") public List<Draft> split(@PathVariable String id) { return service.split(id); }

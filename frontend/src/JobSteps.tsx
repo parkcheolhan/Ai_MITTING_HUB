@@ -20,6 +20,6 @@ export default function JobSteps({meeting}: {meeting: Meeting}) {
   return <section className="job-steps" aria-label="AI 처리 단계">
     <div className="job-steps-heading"><strong>{completed?"AI 처리 완료":waiting?'다음 단계 확인 대기':job.status==="QUEUED"?"AI 처리 대기":`전체 ${stages.length}단계 중 ${current+1}단계`}</strong><span>{completed?`${stages.length}/${stages.length} 완료`:waiting?'결과 확인 후 다음 단계를 시작하세요.':active?"완료되면 자동 갱신됩니다.":job.status==="FAILED"?"실패한 단계에서 오류를 확인하세요.":"작업이 취소되었습니다."}</span></div>
     <ol>{stages.map((s,i)=><li key={s} className={state(i)==="완료"?"done":state(i)==="진행 중"?"running":state(i)==="실패"?"failed":"waiting"} aria-current={!completed&&i===current?"step":undefined}><span className="job-step-number">{i+1}</span><div><strong>{stageLabels[s]||s}</strong><small>{state(i)}</small></div></li>)}</ol>
-    {completed&&stages.includes("GENERATING_TICKETS")&&<p>상위 후보 {meeting.drafts.filter(d=>!d.parentDraftId).length}개 · 하위 후보 {meeting.drafts.filter(d=>!!d.parentDraftId).length}개 · Jira 검토에서 내용을 확인하세요.</p>}
+    {completed&&stages.includes("GENERATING_TICKETS")&&<p>업무 후보 {meeting.drafts.length}개 · Jira 검토에서 내용을 확인하세요.</p>}
   </section>;
 }

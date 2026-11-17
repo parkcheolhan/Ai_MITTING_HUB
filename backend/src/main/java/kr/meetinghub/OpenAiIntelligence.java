@@ -221,39 +221,17 @@ public class OpenAiIntelligence implements Adapters.Intelligence {
     @Override public List<TicketProposal> tickets(String title,Minutes minutes,List<Segment> segments,List<Item> items,String reviewContext){
         source(segments);MeetingService.require(!items.isEmpty(),"AI로 정리할 업무 항목이 없습니다.");
         var child=object("analysisItemIds",strings(),"summary",string(),"background",string(),"tasks",strings(),"checks",strings(),"acceptanceCriteria",strings(),"dependencies",strings(),"reviewNotes",strings(),"aiRecommended",Map.of("type","boolean"));
-        var proposal=object("analysisItemIds",strings(),"summary",string(),"background",string(),"tasks",strings(),"checks",strings(),"acceptanceCriteria",strings(),"dependencies",strings(),"reviewNotes",strings(),"subtasks",array(child),"aiRecommended",Map.of("type","boolean"),"taskTitles",strings(),"checkTitles",strings(),"taskReviews",array(strings()),"checkReviews",array(strings()));
+        var proposal=object("analysisItemIds",strings(),"summary",string(),"background",string(),"tasks",strings(),"checks",strings(),"acceptanceCriteria",strings(),"dependencies",strings(),"reviewNotes",strings(),"subtasks",Map.of("type","array","items",child,"maxItems",0),"aiRecommended",Map.of("type","boolean"),"taskTitles",strings(),"checkTitles",strings(),"taskReviews",array(strings()),"checkReviews",array(strings()));
         Map<String,Object> input=new LinkedHashMap<>();input.put("meetingTitle",title);input.put("minutes",minutes);input.put("transcript",segments);input.put("analysisItems",items);input.put("existingDraft",Objects.toString(reviewContext,""));
         var out=call("jira_ticket_review","""
             Jira 검토 화면에 넣을 업무 티켓 초안을 작성하고 스스로 검토한다. 원문과 업무 항목을 함께 읽어 제목을 업무 중심으로 다듬는다.
             모든 티켓 제목과 본문(배경·작업목록·완료조건·제약사항·AI 검토사항)은 간결한 명사형으로 작성한다. '~한다', '~합니다', '~해야 한다' 같은 서술형 종결은 쓰지 않는다. 예: '확인한다' → '확인', '구현한다' → '구현', '검토해야 한다' → '검토 필요'. 작업 대상·조건·부정·불확실성은 유지한다.
-            상위 티켓은 상위업무(하나의 목적·주제·업무 묶음), 하위 후보는 하위업무(독립적으로 진행하거나 확인할 세부 작업) 기준으로 구성한다.
-            반복 발언·확인 요청·추천이 같은 목적과 완료 산출물을 가리키면 하나의 상위업무에 통합한다. 독립적인 목적과 납품 결과가 다른 업무만 상위 티켓을 분리한다.
-            협의·사전 확인·구현·결과 검증·후속 공유는 같은 업무를 완료하는 과정이면 티켓이 아니라 해당 업무의 체크리스트로 작성한다. 원문 항목 하나나 발언 하나마다 티켓을 만들지 않는다.
-            taskTitles와 checkTitles에는 tasks와 checks 각각에 대응하는 짧은 하위업무 업무명을 같은 개수·순서로 작성한다.
-            하위업무 제목은 핵심 대상과 작업을 나타내는 명사구로 쓴다. '~한다', '~해야 한다', '~요청한다' 같은 문장형 제목을 쓰지 않는다.
-            예: '파일 업로드·다운로드 암호화 처리에 대해 미리 협의하고 테스트를 요청한다.'의 제목은 '파일 업로드·다운로드 암호화 처리'다.
-            협의·테스트 요청 등의 구체적인 수행 방법은 tasks/checks 본문에 유지한다. 제목에 [작업]/[확인]은 서버가 붙이므로 taskTitles/checkTitles에는 중복해서 넣지 않는다.
-            명시적으로 만드는 subtasks.summary도 동일하게 짧은 명사구로 작성한다. 서로 다른 세부 업무의 제목은 구별할 수 있게 쓴다.
-            taskReviews와 checkReviews는 tasks/checks와 같은 개수·순서의 문자열 목록 배열이다. 각 하위업무에 해당하는 작업 전후 확인사항과 작업 관련 코멘트를 1~5개씩 작성한다.
-            '작업 전: 암호화 적용 구간 및 키 관리 주체 확인', '작업 후: 업로드·다운로드 파일의 정상 복호화와 접근 권한 검증'처럼 해당 작업의 대상·입력·위험·결과에 구체적으로 연결한다.
-            하위 후보는 배경·목적을 표시하지 않고 작업목록·완료조건·제약사항·AI 검토사항으로 작성된다. 명시적 subtasks의 reviewNotes도 해당 작업의 전후 점검사항을 목록으로 작성한다.
-            '원문을 검토하세요', '승인 전 등록되지 않습니다', '[제안] 표시는 확정 사실이 아닙니다' 같은 공통 안내는 reviewNotes/taskReviews/checkReviews에 쓰지 않는다. 원문에 없는 점검 제안에는 [제안]을 붙인다.
-            background=배경/목적, tasks=구체적 작업 체크리스트, checks=사전에 확인할 점과 검증 체크리스트,
-            상위업무 background는 연결된 분석 항목을 근거로 작성한다. 하위업무에는 배경·목적을 표시하지 않으므로 background는 빈 문자열로 반환해도 된다. background는 객체나 목록이 아닌 문자열이다.
-            acceptanceCriteria=관측 가능한 완료 조건, dependencies=의존성/제약, reviewNotes=모호함·질문·제안·중복/분할 판단을 쓴다.
-            같은 목적의 항목은 묶어도 되지만 모든 입력 analysisItemIds를 정확히 한 번씩 포함해야 한다. 새로운 항목 ID를 만들지 않는다.
-            existingDraft가 비어 있지 않으면 그 사용자 초안을 검토하여 티켓 하나로 다시 작성한다. 모든 입력 업무 ID를 그 한 티켓에 유지한다.
-            tasks/checks의 항목 하나마다 하위 티켓을 만들지 않는다. 같은 목적·대상·완료 산출물의 수행·협의·확인·검증을 하나의 실행 단위로 묶는다.
-            subtasks에는 독립적인 실행 단위별로 통합 하위 후보를 작성한다. 개수는 max(1, ceil((tasks 수 + checks 수)/6))개 이내를 목표로 하되 단순히 개수를 채우지 않는다.
-            같은 목적의 반복 요구와 표현만 다른 확인 사항은 중복 티켓으로 만들지 말고 기존 작업목록과 검토사항에 합친다. 주제별로 간결한 통합 업무명을 작성한다.
-            각 원문 체크리스트 항목을 해당 하위 tasks/checks에 원문 그대로 배정하고 누락하거나 중복시키지 않는다. 작업과 결과 검증은 되도록 같은 하위 후보에 넣는다.
-            제목은 통합 업무의 핵심 목적을 나타내는 명사구로 작성한다. 확인 후보 제목에는 [확인]만 사용하고 [확인 필요]를 중복 표기하지 않는다. 상세 내용의 불확실성 표시는 유지한다.
-            업무 수행에 필요한 누락된 사전 확인, 진행 작업, 위험 점검, 결과 검증을 스스로 판단하고 필요하면 하위 후보를 반드시 작성한다. 기계적으로 추천 개수를 채우지 않는다.
-            원문에 직접 지시되지 않은 추가 추천 후보는 aiRecommended=true로 표시하고 background와 reviewNotes에 추천 이유 및 확인할 점을 쓴다.
-            원문 지시를 정리한 후보는 aiRecommended=false이다. 분석 항목이 [AI 추천]이면 해당 범위의 후보도 true를 유지한다.
-            추천 업무도 부모 analysisItemIds의 원문을 배경 근거로 연결하되, 추천 자체가 회의에서 결정되었다고 쓰지 않는다. 원문에 없는 작업에는 [제안]을 유지한다.
-            부모의 analysisItemIds에 전체 업무를 유지하고, 하위는 부모 업무 ID의 일부를 근거로 사용한다. 하위끼리 같은 근거 ID를 공유해도 되지만 작업 범위는 중복하지 않는다.
-            명시적인 하위는 부모당 최대 8개이며 추가 계층은 만들지 않는다. 실질적인 업무가 있으면 위 묶음 기준으로 하위 후보를 반환한다.
+            모든 티켓은 에픽 바로 아래에 배치하는 독립된 작업이다. 하위업무나 부모·자식 티켓을 만들지 않는다. subtasks는 항상 빈 배열이다.
+            같은 목적과 완료 산출물을 가리키는 반복 발언·확인 요청·추천은 하나의 작업으로 통합한다. 독립적인 목적과 결과물이 다른 업무만 별도 작업으로 작성한다.
+            협의·사전 확인·구현·결과 검증·후속 공유는 같은 업무의 수행 과정이면 그 작업의 tasks와 checks에 체크리스트로 기록한다. 발언 하나마다 티켓을 만들지 않는다.
+            taskTitles와 checkTitles는 각각 tasks와 checks의 간결한 항목명이며 같은 개수·순서를 유지한다. taskReviews와 checkReviews에는 대응하는 항목의 사전·사후 검토사항을 작성한다.
+            원문에서 명시되지 않은 보완 작업·위험 점검·결과 검증은 필요성을 판단해 해당 작업의 체크리스트에 [제안]으로 작성하고, aiRecommended와 reviewNotes에 제안 여부와 이유를 명확히 표시한다.
+            배경은 원문과 논의 맥락에 근거하여 작성하고 실제 담당자·기한을 임의로 확정하지 않는다.
             기존 초안과 원문이 충돌하면 사실로 확정하지 말고 reviewNotes에 확인이 필요하다고 적는다.
             summary는 200자 이하다. 각 목록은 20개 이하다. tasks/checks/acceptanceCriteria는 비워 두지 않는다.
             원문에 없는 상세 작업·완료 조건은 [제안]을 붙이고 실제 담당자/기한/프로젝트를 임의로 넣지 않는다.
