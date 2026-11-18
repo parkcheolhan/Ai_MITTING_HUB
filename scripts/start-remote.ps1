@@ -2,7 +2,9 @@ param(
   [string]$PagesOrigin='https://parkcheolhan.github.io',
   [int]$Port=8080,
   [switch]$Build,
-  [switch]$NoTunnel
+  [switch]$NoTunnel,
+  [string]$LoginId='admin',
+  [securestring]$LoginPassword
 )
 $ErrorActionPreference='Stop'
 $taskRoot=Split-Path $PSScriptRoot -Parent
@@ -36,6 +38,15 @@ $cloudflared=Join-Path $taskRoot '.tools/cloudflared.exe'
 if(-not $NoTunnel -and -not(Test-Path $cloudflared)){& (Join-Path $PSScriptRoot 'install-tunnel.ps1')}
 $env:APP_REMOTE_TOKEN=$token
 $env:APP_REMOTE_ALLOWED_ORIGINS=$PagesOrigin
+$loginFile=Join-Path $localDir 'login-credentials.json'
+if(-not(Test-Path -LiteralPath $loginFile) -and -not $LoginPassword){$LoginPassword=Read-Host "Login token for $LoginId" -AsSecureString}
+if($LoginPassword){@{id=$LoginId;encryptedPassword=(ConvertFrom-SecureString $LoginPassword)} | ConvertTo-Json | Set-Content -LiteralPath $loginFile -Encoding UTF8}
+if(Test-Path -LiteralPath $loginFile){
+  $login=Get-Content -LiteralPath $loginFile -Raw | ConvertFrom-Json
+  $secure=ConvertTo-SecureString $login.encryptedPassword
+  $pointer=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+  try{$env:APP_REMOTE_LOGIN_ID=$login.id;$env:APP_REMOTE_LOGIN_PASSWORD=[Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)}finally{[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)}
+}
 $env:SERVER_ADDRESS='127.0.0.1'
 $env:SERVER_PORT="$Port"
 $processes=@()
@@ -77,4 +88,5 @@ try{
   throw
 }finally{
   Remove-Item Env:APP_REMOTE_TOKEN -ErrorAction SilentlyContinue
+  Remove-Item Env:APP_REMOTE_LOGIN_ID,Env:APP_REMOTE_LOGIN_PASSWORD -ErrorAction SilentlyContinue
 }

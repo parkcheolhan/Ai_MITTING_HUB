@@ -1,6 +1,6 @@
 export const pagesMode = (globalThis as {MOA_PAGES?:boolean}).MOA_PAGES === true;
 const key='moa-server-connection-v1';
-export type Connection={server:string;token:string};
+export type Connection={server:string;token:string;user?:string;expiresAt?:string};
 export function connection():Connection {
   if(!pagesMode)return {server:'',token:''};
   try{return JSON.parse(sessionStorage.getItem(key)||'null') || {server:'',token:''};}catch{return {server:'',token:''};}
@@ -11,6 +11,6 @@ export function validateServer(value:string){
   return url.origin;
 }
 export function rememberConnection(value:Connection){sessionStorage.setItem(key,JSON.stringify(value));}
-export function disconnect(){sessionStorage.removeItem(key);location.reload();}
+export async function disconnect(){const current=connection();try{if(current.user)await fetch(current.server+'/api/auth/session',{method:'DELETE',headers:{Authorization:'Bearer '+current.token},signal:AbortSignal.timeout(3000)});}catch{/* Local sign-out still completes if the server is unreachable. */}finally{sessionStorage.removeItem(key);location.reload();}}
 export function apiUrl(path:string){return connection().server+'/api'+path;}
 export function authHeaders():Record<string,string>{const {token}=connection();return pagesMode&&token?{Authorization:'Bearer '+token}:{};}

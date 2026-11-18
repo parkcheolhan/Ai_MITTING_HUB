@@ -3,3 +3,5 @@ app:
   remote:
     token: ${APP_REMOTE_TOKEN:}
     allowed-origins: ${APP_REMOTE_ALLOWED_ORIGINS:}
+    login-id: ${APP_REMOTE_LOGIN_ID:}
+    login-password: ${APP_REMOTE_LOGIN_PASSWORD:}

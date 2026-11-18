@@ -23,6 +23,7 @@ public class RemoteAccessFilter extends OncePerRequestFilter {
     static final String AUTHENTICATED = RemoteAccessFilter.class.getName()+".authenticated";
     private final byte[] token;
     private final CorsConfiguration cors = new CorsConfiguration();
+    @org.springframework.beans.factory.annotation.Autowired RemoteLogin login;
     public RemoteAccessFilter(@Value("${app.remote.token:}") String secret,
                               @Value("${app.remote.allowed-origins:}") String origins) {
         if(secret.isBlank() || secret.length()<32)throw new IllegalArgumentException("APP_REMOTE_TOKEN must contain at least 32 characters.");
@@ -46,9 +47,10 @@ public class RemoteAccessFilter extends OncePerRequestFilter {
         response.setHeader("X-Content-Type-Options","nosniff");
         if(!new DefaultCorsProcessor().processRequest(cors,request,response))return;
         if(CorsUtils.isPreFlightRequest(request))return;
+        if(request.getMethod().equals("POST")&&request.getRequestURI().equals("/api/auth/login")){chain.doFilter(request,response);return;}
         String header=request.getHeader("Authorization");
         byte[] supplied=header!=null&&header.startsWith("Bearer ")?header.substring(7).getBytes(StandardCharsets.UTF_8):new byte[0];
-        if(!MessageDigest.isEqual(token,supplied)){
+        if(!MessageDigest.isEqual(token,supplied)&&(login==null||!login.accepts(new String(supplied,StandardCharsets.UTF_8)))){
             response.setStatus(401);response.setContentType("application/json;charset=UTF-8");
             response.getWriter().write("{\"message\":\"접속 토큰이 없거나 올바르지 않습니다. 서버 연결 화면에서 다시 연결하세요.\"}");return;
         }

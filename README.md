@@ -41,7 +41,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-remote.ps1 -
 
 ## Pages 화면에서 연결
 
-Pages 주소를 열고 API 서버 HTTPS 주소에는 `.local-remote/connection.json`의 `apiUrl`을, 접속 토큰에는 `.local-remote/access-token.txt` 내용을 입력합니다. 토큰은 해당 탭의 sessionStorage에만 보관하며 URL·GitHub 소스·API 쿼리에는 넣지 않습니다. 접속 토큰을 가진 사람은 이 서버의 회의·AI·Jira 설정에 접근하는 공유 관리자입니다. 사람별 계정 시스템은 아닙니다.
+Pages 주소를 열고 **ID와 접속 토큰**으로 로그인합니다. 현재 서버 주소는 미리 입력되어 있으며 주소가 바뀌면 `.local-remote/connection.json`의 `apiUrl`을 입력합니다. ID·토큰은 서버에서 검증하고 12시간 동안 유효한 무작위 세션을 발급합니다. 원래 로그인 토큰은 브라우저에 저장하지 않으며 세션은 해당 탭의 sessionStorage에만 보관합니다. 연결 해제 시 세션도 서버에서 폐기합니다. 이 계정은 회의·AI·Jira 설정에 접근하는 공유 관리자입니다.
+
+로그인 정보는 로컬 Windows 사용자에게 암호화한 `.local-remote/login-credentials.json`에 보관하고 GitHub에 업로드하지 않습니다. 처음 실행할 때 `start-remote.ps1`이 ID(기본 `admin`)에 사용할 토큰을 묻습니다. `-LoginId` 및 `-LoginPassword (Read-Host -AsSecureString)`로 지정·변경할 수도 있습니다. 직접 Java 서버를 실행한다면 `APP_REMOTE_LOGIN_ID`와 `APP_REMOTE_LOGIN_PASSWORD`를 설정하세요. 기존 `.local-remote/access-token.txt`의 서버 관리용 토큰 연결도 계속 지원합니다. 인증정보를 URL·GitHub 소스·API 쿼리에 넣지 않습니다.
 
 서버 연결 확인 중 네트워크 오류·시간 초과·일시적인 터널 오류가 발생하면 최대 4회 확인하며 **연결 취소**로 중단할 수 있습니다. 토큰 오류·허용 출처 오류는 재시도하지 않고 원인을 표시합니다. 연결 검증에 성공한 설정만 해당 탭에 저장합니다.
 
